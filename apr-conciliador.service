@@ -1,0 +1,15 @@
+[Unit]
+Description=Conciliador de APR
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/apr-conciliador
+Environment="APP_DATABASE_URL=sqlite:////opt/apr-conciliador/data/app.db"
+ExecStart=/opt/apr-conciliador/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

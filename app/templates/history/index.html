@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Histórico{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Histórico</h1>
+        <p>Acompanhe lotes importados e execuções de comparação registradas no sistema.</p>
+    </div>
+</section>
+
+<div class="two-columns">
+    <section class="card">
+        <h2>Importações</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Lote</th>
+                        <th>Arquivo</th>
+                        <th>Competência</th>
+                        <th>Totais</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in batches %}
+                    <tr>
+                        <td>#{{ batch.id }}</td>
+                        <td>{{ batch.nome_arquivo }}</td>
+                        <td>{{ batch.competencia }}</td>
+                        <td>{{ batch.total_registros }} registros / {{ batch.total_validos }} válidos</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="muted">Nenhuma importação registrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Comparações</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Lote</th>
+                        <th>Competência</th>
+                        <th>Resumo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in comparisons %}
+                    <tr>
+                        <td><a href="/comparisons/{{ run.id }}">#{{ run.id }}</a></td>
+                        <td>#{{ run.batch_id }}</td>
+                        <td>{{ run.competencia }}</td>
+                        <td>{{ run.total_conciliado }} conciliados / {{ run.total_faltando_manual }} faltando no manual / {{ run.total_faltando_importado }} faltando no importado</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="muted">Nenhuma comparação registrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

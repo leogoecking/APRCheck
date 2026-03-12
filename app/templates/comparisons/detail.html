@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Resultado da Comparação{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Resultado da conciliação</h1>
+        <p>Lote #{{ comparison_run.batch_id }} | competência {{ comparison_run.competencia }}</p>
+    </div>
+</section>
+
+<section class="card">
+    <div class="metrics-row">
+        <div><span class="label">Manual</span><strong>{{ comparison_run.total_manual }}</strong></div>
+        <div><span class="label">Importado válido</span><strong>{{ comparison_run.total_importado }}</strong></div>
+        <div><span class="label">Conciliado</span><strong>{{ comparison_run.total_conciliado }}</strong></div>
+        <div><span class="label">Faltando no manual</span><strong>{{ comparison_run.total_faltando_manual }}</strong></div>
+        <div><span class="label">Faltando no importado</span><strong>{{ comparison_run.total_faltando_importado }}</strong></div>
+        <div><span class="label">Duplicados</span><strong>{{ comparison_run.total_duplicados }}</strong></div>
+        <div><span class="label">Inválidos</span><strong>{{ comparison_run.total_invalidos }}</strong></div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>Itens da comparação</h2>
+        <form method="get" action="/comparisons/{{ comparison_run.id }}" class="inline-form">
+            <select name="status">
+                <option value="">Todos</option>
+                {% for option in ['conciliado', 'faltando_no_manual', 'faltando_no_importado', 'duplicado', 'invalido'] %}
+                <option value="{{ option }}" {% if status_filter == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+            <button class="button button-secondary" type="submit">Filtrar</button>
+        </form>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>APR ID</th>
+                    <th>Status</th>
+                    <th>Origem</th>
+                    <th>Detalhe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.apr_id or 'Sem ID' }}</td>
+                    <td>{{ item.status_comparacao }}</td>
+                    <td>{{ item.origem }}</td>
+                    <td>{{ item.detalhe or '' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="muted">Nenhum item encontrado para o filtro aplicado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

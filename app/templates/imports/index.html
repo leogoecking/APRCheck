@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Importações{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Importação de arquivos</h1>
+        <p>Envie um CSV ou XML, informe a competência e gere um lote pronto para conciliação.</p>
+    </div>
+</section>
+
+<div class="two-columns">
+    <section class="card">
+        <h2>Novo lote</h2>
+        {% if form_errors %}
+        <div class="alert alert-error">
+            {% for error in form_errors %}
+            <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form method="post" action="/imports" enctype="multipart/form-data" class="form-grid">
+            <label>Competência
+                <input type="text" name="competencia" placeholder="2026-03" required>
+            </label>
+            <label class="full-width">Arquivo CSV ou XML
+                <input type="file" name="arquivo" accept=".csv,.xml" required>
+            </label>
+            <div class="actions full-width">
+                <button class="button" type="submit">Importar arquivo</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Lotes importados</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Arquivo</th>
+                        <th>Competência</th>
+                        <th>Registros</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in batches %}
+                    <tr>
+                        <td>#{{ batch.id }}</td>
+                        <td>{{ batch.nome_arquivo }}</td>
+                        <td>{{ batch.competencia }}</td>
+                        <td>{{ batch.total_registros }}</td>
+                        <td><a href="/imports?batch_id={{ batch.id }}">Detalhes</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="muted">Nenhum lote importado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+{% if selected_batch %}
+<section class="card">
+    <div class="section-header">
+        <div>
+            <h2>Resumo do lote #{{ selected_batch.id }}</h2>
+            <p class="muted">{{ selected_batch.nome_arquivo }} | competência {{ selected_batch.competencia }}</p>
+        </div>
+        <form method="post" action="/comparisons/run/{{ selected_batch.id }}">
+            <button class="button" type="submit">Executar conciliação</button>
+        </form>
+    </div>
+    <div class="metrics-row">
+        <div><span class="label">Registros</span><strong>{{ selected_batch.total_registros }}</strong></div>
+        <div><span class="label">Válidos</span><strong>{{ selected_batch.total_validos }}</strong></div>
+        <div><span class="label">Inválidos</span><strong>{{ selected_batch.total_invalidos }}</strong></div>
+        <div><span class="label">Duplicados</span><strong>{{ selected_batch.total_duplicados }}</strong></div>
+    </div>
+    {% if selected_batch.comparison_runs %}
+    <p class="muted">Última comparação deste lote: <a href="/comparisons/{{ selected_batch.comparison_runs[0].id }}">abrir resultado</a>.</p>
+    {% endif %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>APR ID</th>
+                    <th>Válido</th>
+                    <th>Duplicado</th>
+                    <th>Mensagem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in selected_batch.imported_aprs %}
+                <tr>
+                    <td>{{ row.apr_id or 'Sem ID' }}</td>
+                    <td>{{ 'Sim' if row.is_valid else 'Não' }}</td>
+                    <td>{{ 'Sim' if row.is_duplicate else 'Não' }}</td>
+                    <td>{{ row.error_message or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Conciliador de APR{% endblock %}</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <div class="container topbar-inner">
+            <div>
+                <a class="brand" href="/">Conciliador de APR</a>
+                <p class="subtitle">Conciliação local por ID com histórico persistido</p>
+            </div>
+            <nav class="nav">
+                <a href="/">Dashboard</a>
+                <a href="/manual-aprs">Cadastro Manual</a>
+                <a href="/imports">Importações</a>
+                <a href="/divergences">Divergências</a>
+                <a href="/history">Histórico</a>
+            </nav>
+        </div>
+    </header>
+    <main class="container content">
+        {% if flash %}
+        <div class="alert alert-{{ flash.level }}">{{ flash.message }}</div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

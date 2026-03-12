@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Resumo operacional do cadastro manual, das importações e da última conciliação.</p>
+    </div>
+</section>
+
+<section class="card-grid">
+    <article class="card stat-card"><span class="label">APRs manuais</span><strong>{{ summary.total_manual }}</strong></article>
+    <article class="card stat-card"><span class="label">APRs importadas</span><strong>{{ summary.total_imported }}</strong></article>
+    <article class="card stat-card"><span class="label">IDs conciliados</span><strong>{{ summary.total_conciliated }}</strong></article>
+    <article class="card stat-card"><span class="label">Faltando no manual</span><strong>{{ summary.missing_manual }}</strong></article>
+    <article class="card stat-card"><span class="label">Faltando no importado</span><strong>{{ summary.missing_imported }}</strong></article>
+    <article class="card stat-card"><span class="label">Duplicidades</span><strong>{{ summary.total_duplicates }}</strong></article>
+    <article class="card stat-card"><span class="label">Importações</span><strong>{{ summary.total_batches }}</strong></article>
+</section>
+
+<section class="card">
+    <h2>Última comparação</h2>
+    {% if summary.latest_run %}
+    <div class="metrics-row">
+        <div><span class="label">Competência</span><strong>{{ summary.latest_run.competencia }}</strong></div>
+        <div><span class="label">Lote</span><strong>#{{ summary.latest_run.batch_id }}</strong></div>
+        <div><span class="label">Conciliado</span><strong>{{ summary.latest_run.total_conciliado }}</strong></div>
+        <div><span class="label">Inválidos</span><strong>{{ summary.latest_run.total_invalidos }}</strong></div>
+    </div>
+    <p class="muted">Faltando no manual: {{ summary.latest_run.total_faltando_manual }} | Faltando no importado: {{ summary.latest_run.total_faltando_importado }} | Duplicados: {{ summary.latest_run.total_duplicados }}</p>
+    <a class="button" href="/comparisons/{{ summary.latest_run.id }}">Abrir resultado</a>
+    {% else %}
+    <p class="muted">Nenhuma comparação executada até o momento.</p>
+    {% endif %}
+</section>
+{% endblock %}

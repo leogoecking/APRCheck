@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Divergências{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Divergências</h1>
+        <p>Filtre por competência, categoria ou ID e exporte o resultado atual em CSV.</p>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" action="/divergences" class="inline-form inline-form-wide">
+        <input type="text" name="competencia" placeholder="Competência" value="{{ filters.competencia or '' }}">
+        <select name="categoria">
+            <option value="">Todas as categorias</option>
+            {% for option in ['faltando_no_manual', 'faltando_no_importado', 'duplicado', 'invalido'] %}
+            <option value="{{ option }}" {% if filters.categoria == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="apr_id" placeholder="APR ID" value="{{ filters.apr_id or '' }}">
+        <button class="button" type="submit">Aplicar filtros</button>
+        <a class="button button-secondary" href="/divergences/export?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}">Exportar CSV</a>
+    </form>
+</section>
+
+<section class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Competência</th>
+                    <th>Lote</th>
+                    <th>Comparação</th>
+                    <th>APR ID</th>
+                    <th>Categoria</th>
+                    <th>Origem</th>
+                    <th>Detalhe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item, comparison_run, batch in items %}
+                <tr>
+                    <td>{{ comparison_run.competencia }}</td>
+                    <td>#{{ batch.id }}</td>
+                    <td><a href="/comparisons/{{ comparison_run.id }}">#{{ comparison_run.id }}</a></td>
+                    <td>{{ item.apr_id or 'Sem ID' }}</td>
+                    <td>{{ item.status_comparacao }}</td>
+                    <td>{{ item.origem }}</td>
+                    <td>{{ item.detalhe or '' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="muted">Nenhuma divergência encontrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Editar APR Manual{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Editar APR manual</h1>
+        <p>Atualize dados de contexto sem alterar a regra central de conciliação por ID.</p>
+    </div>
+</section>
+
+<section class="card">
+    {% if form_errors %}
+    <div class="alert alert-error">
+        {% for error in form_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" action="/manual-aprs/{{ manual_apr.id }}/edit" class="form-grid">
+        <label>APR ID
+            <input type="text" name="apr_id" value="{{ manual_apr.apr_id }}" required>
+        </label>
+        <label>Data de referência
+            <input type="date" name="data_referencia" value="{{ manual_apr.data_referencia or '' }}">
+        </label>
+        <label>Responsável
+            <input type="text" name="responsavel" value="{{ manual_apr.responsavel or '' }}">
+        </label>
+        <label>Status
+            <input type="text" name="status" value="{{ manual_apr.status or '' }}">
+        </label>
+        <label class="full-width">Descrição
+            <textarea name="descricao" rows="3">{{ manual_apr.descricao or '' }}</textarea>
+        </label>
+        <label class="full-width">Observação
+            <textarea name="observacao" rows="3">{{ manual_apr.observacao or '' }}</textarea>
+        </label>
+        <div class="actions full-width">
+            <button class="button" type="submit">Salvar alterações</button>
+            <a class="button button-secondary" href="/manual-aprs">Voltar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

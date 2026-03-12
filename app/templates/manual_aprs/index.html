@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Cadastro Manual{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Cadastro manual de APR</h1>
+        <p>O cadastro manual impede duplicidade de ID e mantém a base usada na conciliação.</p>
+    </div>
+</section>
+
+<div class="two-columns">
+    <section class="card">
+        <h2>Nova APR manual</h2>
+        {% if form_errors %}
+        <div class="alert alert-error">
+            {% for error in form_errors %}
+            <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form method="post" action="/manual-aprs" class="form-grid">
+            <label>APR ID
+                <input type="text" name="apr_id" value="{{ form_data.get('apr_id', '') }}" required>
+            </label>
+            <label>Data de referência
+                <input type="date" name="data_referencia" value="{{ form_data.get('data_referencia', '') }}">
+            </label>
+            <label>Responsável
+                <input type="text" name="responsavel" value="{{ form_data.get('responsavel', '') }}">
+            </label>
+            <label>Status
+                <input type="text" name="status" value="{{ form_data.get('status', '') }}">
+            </label>
+            <label class="full-width">Descrição
+                <textarea name="descricao" rows="3">{{ form_data.get('descricao', '') }}</textarea>
+            </label>
+            <label class="full-width">Observação
+                <textarea name="observacao" rows="3">{{ form_data.get('observacao', '') }}</textarea>
+            </label>
+            <div class="actions full-width">
+                <button class="button" type="submit">Salvar APR</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h2>APRs cadastradas</h2>
+            <form method="get" action="/manual-aprs" class="inline-form">
+                <input type="text" name="q" placeholder="Buscar por ID" value="{{ query }}">
+                <button class="button button-secondary" type="submit">Buscar</button>
+            </form>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>APR ID</th>
+                        <th>Data</th>
+                        <th>Responsável</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in manual_aprs %}
+                    <tr>
+                        <td>{{ item.apr_id }}</td>
+                        <td>{{ item.data_referencia or '' }}</td>
+                        <td>{{ item.responsavel or '' }}</td>
+                        <td>{{ item.status or '' }}</td>
+                        <td><a href="/manual-aprs/{{ item.id }}/edit">Editar</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="muted">Nenhuma APR manual encontrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}
