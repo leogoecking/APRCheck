@@ -44,4 +44,4 @@ def comparison_detail(
         "status_filter": status_filter or "",
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("comparisons/detail.html", context)
+    return request.app.state.templates.TemplateResponse(request, "comparisons/detail.html", context)

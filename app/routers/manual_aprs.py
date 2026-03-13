@@ -30,7 +30,7 @@ def manual_apr_list(request: Request, q: str | None = None, db: Session = Depend
         "form_errors": [],
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("manual_aprs/index.html", context)
+    return request.app.state.templates.TemplateResponse(request, "manual_aprs/index.html", context)
 
 
 @router.post("")
@@ -62,6 +62,21 @@ def manual_apr_create(
             status=status_apr,
         )
         create_manual_apr(db, payload)
+    except ManualAPRConflictError as exc:
+        context = {
+            "request": request,
+            "manual_aprs": list_manual_aprs(db),
+            "query": "",
+            "form_data": form_data,
+            "form_errors": [str(exc)],
+            "flash": None,
+        }
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "manual_aprs/index.html",
+            context,
+            status_code=status.HTTP_409_CONFLICT,
+        )
     except (ValidationError, ValueError) as exc:
         errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
         context = {
@@ -73,23 +88,10 @@ def manual_apr_create(
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
+            request,
             "manual_aprs/index.html",
             context,
             status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    except ManualAPRConflictError as exc:
-        context = {
-            "request": request,
-            "manual_aprs": list_manual_aprs(db),
-            "query": "",
-            "form_data": form_data,
-            "form_errors": [str(exc)],
-            "flash": None,
-        }
-        return request.app.state.templates.TemplateResponse(
-            "manual_aprs/index.html",
-            context,
-            status_code=status.HTTP_409_CONFLICT,
         )
 
     set_flash(request, "success", "APR manual cadastrada com sucesso.")
@@ -107,7 +109,7 @@ def manual_apr_edit_form(request: Request, manual_apr_id: int, db: Session = Dep
         "form_errors": [],
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("manual_aprs/edit.html", context)
+    return request.app.state.templates.TemplateResponse(request, "manual_aprs/edit.html", context)
 
 
 @router.post("/{manual_apr_id}/edit")
@@ -135,6 +137,19 @@ def manual_apr_edit(
             status=status_apr,
         )
         update_manual_apr(db, manual_apr, payload)
+    except ManualAPRConflictError as exc:
+        context = {
+            "request": request,
+            "manual_apr": manual_apr,
+            "form_errors": [str(exc)],
+            "flash": None,
+        }
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "manual_aprs/edit.html",
+            context,
+            status_code=status.HTTP_409_CONFLICT,
+        )
     except (ValidationError, ValueError) as exc:
         errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
         context = {
@@ -144,21 +159,10 @@ def manual_apr_edit(
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
+            request,
             "manual_aprs/edit.html",
             context,
             status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    except ManualAPRConflictError as exc:
-        context = {
-            "request": request,
-            "manual_apr": manual_apr,
-            "form_errors": [str(exc)],
-            "flash": None,
-        }
-        return request.app.state.templates.TemplateResponse(
-            "manual_aprs/edit.html",
-            context,
-            status_code=status.HTTP_409_CONFLICT,
         )
 
     set_flash(request, "success", "APR manual atualizada com sucesso.")

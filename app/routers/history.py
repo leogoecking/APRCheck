@@ -34,4 +34,4 @@ def history_page(request: Request, db: Session = Depends(get_db)) -> object:
         "comparisons": comparisons,
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("history/index.html", context)
+    return request.app.state.templates.TemplateResponse(request, "history/index.html", context)

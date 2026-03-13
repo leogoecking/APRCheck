@@ -37,7 +37,7 @@ def divergences_page(
         "filters": filters,
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("divergences/index.html", context)
+    return request.app.state.templates.TemplateResponse(request, "divergences/index.html", context)
 
 
 @router.get("/export")

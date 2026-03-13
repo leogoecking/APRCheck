@@ -37,7 +37,7 @@ def imports_page(
         "form_errors": [],
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("imports/index.html", context)
+    return request.app.state.templates.TemplateResponse(request, "imports/index.html", context)
 
 
 @router.post("")
@@ -61,6 +61,7 @@ def import_file(
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
+            request,
             "imports/index.html",
             context,
             status_code=status.HTTP_400_BAD_REQUEST,

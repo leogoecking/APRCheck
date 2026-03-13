@@ -18,4 +18,4 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> object:
         "summary": get_dashboard_summary(db),
         "flash": pop_flash(request),
     }
-    return request.app.state.templates.TemplateResponse("dashboard.html", context)
+    return request.app.state.templates.TemplateResponse(request, "dashboard.html", context)

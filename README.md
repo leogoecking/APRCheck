@@ -52,7 +52,22 @@ sudo apt install -y python3 python3-venv sqlite3
 
 2. Copie o projeto para o servidor, por exemplo em `/opt/apr-conciliador`.
 
-3. Crie e ative um ambiente virtual:
+3. Para subir com um único comando:
+
+```bash
+cd /opt/apr-conciliador
+./run.sh
+```
+
+O script cria o `venv` se necessário, instala dependências, inicializa o banco e sobe o servidor.
+Ele também detecta automaticamente um host/porta adequados para o ambiente:
+
+- por padrão, sobe em `0.0.0.0:8000`, permitindo acesso dentro da máquina e também de fora da VM/rede
+- `reload` fica ligado em uso interativo normal e desligado em CI/ambientes típicos de servidor
+- variáveis explícitas sempre têm prioridade: `HOST`, `PORT`, `APP_HOST`, `APP_PORT`, `RELOAD`
+- se a porta escolhida estiver ocupada, o script usa automaticamente a próxima porta livre
+
+4. Se preferir fazer manualmente, crie e ative um ambiente virtual:
 
 ```bash
 cd /opt/apr-conciliador
@@ -60,13 +75,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-4. Instale as dependências:
+5. Instale as dependências:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-5. Inicialize o banco:
+6. Inicialize o banco:
 
 ```bash
 python scripts/init_db.py
@@ -75,10 +90,17 @@ python scripts/init_db.py
 ## Execução local
 
 ```bash
-uvicorn app.main:app --reload
+./run.sh
 ```
 
-Abra `http://127.0.0.1:8000`.
+Abra `http://127.0.0.1:8000` na própria máquina, ou `http://IP_DA_VM:8000` a partir de fora.
+
+Exemplos de override:
+
+```bash
+HOST=0.0.0.0 PORT=8080 ./run.sh
+RELOAD=false ./run.sh
+```
 
 ## Execução via systemd
 

@@ -164,7 +164,7 @@ def _extract_xml_records(root: ET.Element) -> list[dict[str, str]]:
             for child in children
             if len(list(child)) == 0
         }
-        if child_payload and detect_apr_key(child_payload.keys()):
+        if child_payload:
             candidates.append(child_payload)
     return candidates
 
