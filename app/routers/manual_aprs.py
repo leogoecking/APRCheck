@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.schemas.forms import ManualAPRInput
+from app.services.comparison_service import rerun_all_comparisons
 from app.services.manual_apr_service import (
     ManualAPRConflictError,
     create_manual_apr,
@@ -94,6 +95,7 @@ def manual_apr_create(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    rerun_all_comparisons(db)
     set_flash(request, "success", "APR manual cadastrada com sucesso.")
     return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -165,5 +167,6 @@ def manual_apr_edit(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    rerun_all_comparisons(db)
     set_flash(request, "success", "APR manual atualizada com sucesso.")
     return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)

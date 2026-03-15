@@ -9,11 +9,18 @@ from app.models.entities import ComparisonItem, ComparisonRun, ImportBatch, Impo
 def run_comparison(db: Session, batch_id: int) -> ComparisonRun | None:
     batch = db.scalar(
         select(ImportBatch)
-        .options(selectinload(ImportBatch.imported_aprs))
+        .options(
+            selectinload(ImportBatch.imported_aprs),
+            selectinload(ImportBatch.comparison_runs).selectinload(ComparisonRun.items),
+        )
         .where(ImportBatch.id == batch_id)
     )
     if batch is None:
         return None
+
+    for existing_run in list(batch.comparison_runs):
+        db.delete(existing_run)
+    db.flush()
 
     manual_ids = set(db.scalars(select(ManualAPR.apr_id)))
     imported_valid_ids = {
@@ -108,6 +115,18 @@ def get_comparison_run(db: Session, run_id: int) -> ComparisonRun | None:
         )
         .where(ComparisonRun.id == run_id)
     )
+
+
+def rerun_all_comparisons(db: Session) -> list[ComparisonRun]:
+    batch_ids = list(
+        db.scalars(select(ImportBatch.id).order_by(ImportBatch.created_at.asc(), ImportBatch.id.asc()))
+    )
+    results: list[ComparisonRun] = []
+    for batch_id in batch_ids:
+        comparison_run = run_comparison(db, batch_id)
+        if comparison_run is not None:
+            results.append(comparison_run)
+    return results
 
 
 def list_divergence_items(

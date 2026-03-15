@@ -4,7 +4,7 @@
 <section class="page-header">
     <div>
         <h1>Importação de arquivos</h1>
-        <p>Envie um CSV ou XML, informe a competência e gere um lote pronto para conciliação.</p>
+        <p>Envie um CSV, TSV, TXT ou XML, informe a competência e gere um lote pronto para conciliação.</p>
     </div>
 </section>
 
@@ -22,8 +22,8 @@
             <label>Competência
                 <input type="text" name="competencia" placeholder="2026-03" required>
             </label>
-            <label class="full-width">Arquivo CSV ou XML
-                <input type="file" name="arquivo" accept=".csv,.xml" required>
+            <label class="full-width">Arquivo CSV, TSV, TXT ou XML
+                <input type="file" name="arquivo" accept=".csv,.tsv,.txt,.xml,text/csv,text/plain,application/xml,text/xml" required>
             </label>
             <div class="actions full-width">
                 <button class="button" type="submit">Importar arquivo</button>

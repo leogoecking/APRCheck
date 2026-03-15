@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from io import BytesIO
+
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
+from app.models.entities import ComparisonRun
 from app.routers.comparisons import comparison_detail, execute_comparison
 from app.routers.divergences import divergences_page, export_divergences
 from app.routers.imports import import_file
@@ -130,5 +132,52 @@ def test_import_run_comparison_and_export(app_module):
         assert export.status_code == 200
         assert "text/csv" in export.headers["content-type"]
         assert "divergencias.csv" in export.headers["content-disposition"]
+    finally:
+        db.close()
+
+
+def test_manual_apr_create_reruns_existing_comparisons(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        upload = UploadFile(
+            filename="lote.csv",
+            file=BytesIO(b"apr_id,descricao\nAPR-1,Conciliado\nAPR-2,Faltando manual\n"),
+        )
+        import_response = import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=upload,
+            db=db,
+        )
+        assert import_response.status_code == 303
+
+        comparison_response = execute_comparison(
+            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
+            batch_id=1,
+            db=db,
+        )
+        assert comparison_response.status_code == 303
+
+        run_before = db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).one()
+        assert run_before.total_manual == 0
+        assert run_before.total_conciliado == 0
+        assert run_before.total_faltando_manual == 2
+
+        create_response = manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-1",
+            data_referencia=None,
+            responsavel="Maria",
+            descricao=None,
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+        assert create_response.status_code == 303
+
+        run_after = db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).one()
+        assert run_after.total_manual == 1
+        assert run_after.total_conciliado == 1
+        assert run_after.total_faltando_manual == 1
     finally:
         db.close()

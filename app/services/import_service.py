@@ -6,6 +6,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from fastapi import UploadFile
@@ -33,10 +34,10 @@ def create_import_batch(db: Session, upload: UploadFile, payload: ImportBatchInp
     filename = upload.filename or "arquivo_sem_nome"
     extension = os.path.splitext(filename)[1].lower()
     raw_data = upload.file.read()
-    if extension not in {".csv", ".xml"}:
-        raise ImportValidationError("Envie um arquivo CSV ou XML.")
+    if extension not in {".csv", ".tsv", ".txt", ".xml"}:
+        raise ImportValidationError("Envie um arquivo CSV, TSV, TXT ou XML.")
 
-    if extension == ".csv":
+    if extension in {".csv", ".tsv", ".txt"}:
         parsed_rows = parse_csv_bytes(raw_data)
     else:
         parsed_rows = parse_xml_bytes(raw_data)
@@ -72,7 +73,7 @@ def create_import_batch(db: Session, upload: UploadFile, payload: ImportBatchInp
 def parse_csv_bytes(raw_data: bytes) -> list[ParsedImportRow]:
     text = _decode_text(raw_data)
     stream = io.StringIO(text)
-    reader = csv.DictReader(stream)
+    reader = csv.DictReader(stream, dialect=_detect_csv_dialect(text))
     if not reader.fieldnames:
         raise ImportValidationError("O CSV não possui cabeçalho.")
 
@@ -153,20 +154,49 @@ def _decode_text(raw_data: bytes) -> str:
     raise ImportValidationError("Não foi possível decodificar o arquivo enviado.")
 
 
+def _detect_csv_dialect(text: str) -> csv.Dialect | type[csv.Dialect]:
+    sample = text[:4096]
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",;|\t")
+    except csv.Error:
+        return csv.excel
+
+
 def _extract_xml_records(root: ET.Element) -> list[dict[str, str]]:
-    candidates: list[dict[str, str]] = []
-    for parent in root.iter():
-        children = list(parent)
-        if not children:
-            continue
-        child_payload = {
-            _normalize_xml_tag(child.tag): (child.text or "")
-            for child in children
-            if len(list(child)) == 0
-        }
-        if child_payload:
-            candidates.append(child_payload)
-    return candidates
+    direct_record_children = [child for child in root if list(child)]
+    if direct_record_children:
+        return [_element_to_payload(child) for child in direct_record_children]
+
+    payload = _element_to_payload(root)
+    return [payload] if payload else []
+
+
+def _element_to_payload(element: ET.Element) -> dict[str, str]:
+    payload: dict[str, str] = {}
+    for key, value in _extract_element_fields(element):
+        payload[key] = value
+    return payload
+
+
+def _extract_element_fields(element: ET.Element, prefix: str = "") -> Iterable[tuple[str, str]]:
+    for attr_name, attr_value in element.attrib.items():
+        normalized_attr = _normalize_xml_tag(attr_name)
+        if normalized_attr:
+            yield prefix + normalized_attr, attr_value
+
+    children = list(element)
+    if not children:
+        text = (element.text or "").strip()
+        key = prefix + _normalize_xml_tag(element.tag)
+        if key and text:
+            yield key, text
+        return
+
+    for child in children:
+        child_prefix = prefix
+        if list(child):
+            child_prefix = prefix + _normalize_xml_tag(child.tag) + "_"
+        yield from _extract_element_fields(child, child_prefix)
 
 
 def _normalize_xml_tag(tag: str) -> str:
