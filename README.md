@@ -31,15 +31,27 @@ APRCheck/
 └─ AGENTS.md
 ```
 
-## Funcionalidades do MVP
+## Funcionalidades atuais
 
 - Dashboard com totais e resumo da última comparação.
-- Cadastro manual com criação, listagem, busca por ID e edição.
+- Cadastro manual com criação, listagem, busca por ID, ordenação, edição e exclusão segura.
+- Importação manual em lote por texto colado.
+- Importação e exportação CSV da base manual.
 - Importação de CSV/XML com competência manual por lote.
 - Validação de IDs, tolerância a colunas extras e detecção de duplicados no lote.
 - Conciliação manual por lote ou por competência baseada somente em `apr_id`.
-- Tela de divergências com filtros e exportação CSV.
+- Campos visuais de apoio como `assunto` e `data de abertura`, sem impacto na lógica de conciliação.
+- Tela de divergências com filtros, paginação e exportação CSV.
 - Histórico preservado de importações e comparações, sem sobrescrever execuções anteriores.
+- Trilho de auditoria para criação, edição, importação em lote e exclusão da base manual.
+
+## Fluxo operacional recomendado
+
+1. Cadastre APRs manuais em `/manual-aprs`, individualmente ou por importação manual/CSV.
+2. Importe os lotes externos em `/imports`, informando a competência.
+3. Execute a conciliação por lote ou por competência.
+4. Analise divergências em `/divergences`.
+5. Consulte histórico e auditoria em `/history`.
 
 ## Instalação no Debian
 
@@ -128,6 +140,6 @@ sudo systemctl status apr-conciliador
 ## Melhorias futuras
 
 - Ajustar o parser para layouts reais de XML/CSV do sistema principal.
-- Adicionar paginação nas listagens.
 - Incluir autenticação simples se o ambiente exigir.
 - Permitir exportações adicionais por lote e comparação.
+- Adicionar filtros mais avançados na auditoria manual.
