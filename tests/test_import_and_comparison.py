@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 from app.models.entities import ComparisonRun, ManualAPR, ManualAPRAuditLog
 from app.schemas.forms import ImportBatchInput, ManualAPRInput
 from app.services.comparison_service import (
+    build_import_preview_map,
     extract_visual_fields,
     run_batch_comparison,
     run_competencia_comparison,
 )
 from app.services.import_service import create_import_batch, parse_csv_bytes, parse_xml_bytes
 from app.services.manual_apr_service import create_manual_apr, import_manual_aprs_from_text
+
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def test_parse_csv_detects_alternate_header_and_duplicates():
@@ -55,6 +60,33 @@ def test_parse_csv_accepts_tab_delimited_id_header():
     assert rows[1].is_valid is True
 
 
+def test_parse_csv_matches_real_mes03_sample_fixture():
+    rows = parse_csv_bytes((FIXTURES_DIR / "real_mes03_sample.csv").read_bytes())
+
+    assert len(rows) == 4
+    assert rows[0].apr_id == "237673"
+    assert rows[1].apr_id == "237674"
+    assert rows[1].payload["Assunto"] == "MANUTENÇÃO CAIXA NAP"
+    assert rows[3].payload["Colaborador"] == "HARISSON LUCAS CRUZ RESENDE"
+    assert all(row.is_valid for row in rows)
+
+
+def test_parse_csv_ignores_sep_and_preamble_before_real_header():
+    rows = parse_csv_bytes(
+        (
+            "Relatorio de exportacao\n"
+            "Gerado em 2026-03-11\n"
+            "sep=;\n"
+            "Numero da APR;Assunto;Abertura\n"
+            "APR-900;MANUTENCAO;11/03/2026 13:10\n"
+        ).encode("utf-8")
+    )
+
+    assert len(rows) == 1
+    assert rows[0].apr_id == "APR-900"
+    assert rows[0].is_valid is True
+
+
 def test_extract_visual_fields_reads_assunto_and_open_date_without_time():
     preview = extract_visual_fields(
         '{"ID":"238474","Assunto":"MANUTENCAO CAIXA NAP","Abertura":"11/03/2026 13:10"}'
@@ -62,6 +94,36 @@ def test_extract_visual_fields_reads_assunto_and_open_date_without_time():
 
     assert preview["assunto"] == "MANUTENCAO CAIXA NAP"
     assert preview["data_abertura"] == "11/03/2026"
+
+
+def test_real_mes03_sample_generates_visual_preview_map(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        batch = create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "Mes03.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: (FIXTURES_DIR / "real_mes03_sample.csv").read_bytes()},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        preview_map = build_import_preview_map(batch.imported_aprs)
+
+        assert preview_map["237673"]["assunto"] == "MANUTENCAO FIBRA - INFRA"
+        assert preview_map["237673"]["data_abertura"] == "01/03/2026"
+        assert preview_map["237746"]["assunto"] == "DOCUMENTAÇÃO FIBRA"
+        assert preview_map["237746"]["data_abertura"] == "02/03/2026"
+    finally:
+        db.close()
 
 
 def test_manual_bulk_import_accepts_structured_text_and_maps_visual_fields(app_module):
@@ -113,6 +175,24 @@ def test_parse_xml_accepts_attribute_and_nested_id_fields():
     assert rows[0].is_valid is True
     assert rows[1].apr_id == "APR-201"
     assert rows[1].is_valid is True
+
+
+def test_parse_xml_detects_repeated_records_in_nested_collection():
+    xml = b"""
+    <retorno>
+        <lote>
+            <registros>
+                <item><numero_da_apr>APR-301</numero_da_apr><assunto>A</assunto></item>
+                <item><numero_da_apr>APR-302</numero_da_apr><assunto>B</assunto></item>
+            </registros>
+        </lote>
+    </retorno>
+    """
+    rows = parse_xml_bytes(xml)
+
+    assert len(rows) == 2
+    assert rows[0].apr_id == "APR-301"
+    assert rows[1].apr_id == "APR-302"
 
 
 def test_batch_comparison_uses_only_apr_id(app_module):

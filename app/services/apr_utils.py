@@ -23,6 +23,9 @@ APR_KEY_CANDIDATES = (
     "numerodaapr",
     "numero_da_apr",
     "identificadorapr",
+    "nrdaapr",
+    "nrdapr",
+    "numerodocumentoapr",
 )
 
 FALLBACK_APR_KEY_CANDIDATES = (
@@ -33,9 +36,10 @@ SUBJECT_KEY_CANDIDATES = (
     "assunto",
     "titulo",
     "descricao",
-    "descricao",
     "resumo",
     "motivo",
+    "servico",
+    "atividade",
 )
 
 OPEN_DATE_KEY_CANDIDATES = (
@@ -45,6 +49,7 @@ OPEN_DATE_KEY_CANDIDATES = (
     "data",
     "dataregistro",
     "datareferencia",
+    "datahoraabertura",
 )
 
 

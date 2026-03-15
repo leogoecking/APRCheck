@@ -13,7 +13,7 @@ from app.routers.comparisons import (
 )
 from app.routers.divergences import divergences_page, export_divergences
 from app.routers.history import history_page
-from app.routers.imports import import_file
+from app.routers.imports import import_batch_delete, import_batch_delete_confirm, import_file
 from app.routers.manual_aprs import (
     manual_apr_create,
     manual_apr_delete,
@@ -266,6 +266,80 @@ def test_import_run_comparison_and_export(app_module):
         assert export.status_code == 200
         assert "text/csv" in export.headers["content-type"]
         assert "divergencias.csv" in export.headers["content-disposition"]
+    finally:
+        db.close()
+
+
+def test_import_batch_delete_requires_confirmation_and_updates_remaining_competencia_runs(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-1",
+            data_referencia="2026-03-01",
+            responsavel="Equipe",
+            descricao=None,
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+
+        for filename, content in (
+            ("lote-a.csv", b"apr_id,descricao\nAPR-1,Conciliado\nAPR-2,Faltando manual\n"),
+            ("lote-b.csv", b"apr_id,descricao\nAPR-3,Novo\n"),
+        ):
+            response = import_file(
+                make_request(app_module.app, method="POST", path="/imports"),
+                competencia="2026-03",
+                arquivo=UploadFile(filename=filename, file=BytesIO(content)),
+                db=db,
+            )
+            assert response.status_code == 303
+
+        execute_comparison(
+            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
+            batch_id=1,
+            db=db,
+        )
+        execute_comparison(
+            make_request(app_module.app, method="POST", path="/comparisons/run/2"),
+            batch_id=2,
+            db=db,
+        )
+        execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
+            db=db,
+        )
+
+        confirm_page = import_batch_delete_confirm(
+            make_request(app_module.app, path="/imports/1/delete"),
+            batch_id=1,
+            db=db,
+        )
+        assert confirm_page.status_code == 200
+        assert "Digite o ID do lote para confirmar" in confirm_page.body.decode()
+
+        invalid_delete = import_batch_delete(
+            make_request(app_module.app, method="POST", path="/imports/1/delete"),
+            batch_id=1,
+            confirm_batch_id="999",
+            db=db,
+        )
+        assert invalid_delete.status_code == 400
+
+        valid_delete = import_batch_delete(
+            make_request(app_module.app, method="POST", path="/imports/1/delete"),
+            batch_id=1,
+            confirm_batch_id="1",
+            db=db,
+        )
+        assert valid_delete.status_code == 303
+
+        remaining_batches = list(db.query(ComparisonRun).filter(ComparisonRun.batch_id == 2).order_by(ComparisonRun.id.asc()))
+        assert db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).count() == 0
+        assert remaining_batches[-1].total_manual == 1
+        assert remaining_batches[-1].total_faltando_importado == 1
     finally:
         db.close()
 

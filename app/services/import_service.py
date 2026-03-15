@@ -70,8 +70,17 @@ def create_import_batch(db: Session, upload: UploadFile, payload: ImportBatchInp
     return batch
 
 
+def get_import_batch(db: Session, batch_id: int) -> ImportBatch | None:
+    return db.get(ImportBatch, batch_id)
+
+
+def delete_import_batch(db: Session, batch: ImportBatch) -> None:
+    db.delete(batch)
+    db.commit()
+
+
 def parse_csv_bytes(raw_data: bytes) -> list[ParsedImportRow]:
-    text = _decode_text(raw_data)
+    text = _prepare_csv_text(_decode_text(raw_data))
     stream = io.StringIO(text)
     reader = csv.DictReader(stream, dialect=_detect_csv_dialect(text))
     if not reader.fieldnames:
@@ -163,9 +172,13 @@ def _detect_csv_dialect(text: str) -> csv.Dialect | type[csv.Dialect]:
 
 
 def _extract_xml_records(root: ET.Element) -> list[dict[str, str]]:
-    direct_record_children = [child for child in root if list(child)]
-    if direct_record_children:
-        return [_element_to_payload(child) for child in direct_record_children]
+    repeated_candidates = _find_repeated_record_elements(root)
+    if repeated_candidates:
+        return [_element_to_payload(element) for element in repeated_candidates]
+
+    apr_candidates = _find_elements_with_apr_id(root)
+    if apr_candidates:
+        return [_element_to_payload(element) for element in apr_candidates]
 
     payload = _element_to_payload(root)
     return [payload] if payload else []
@@ -203,3 +216,69 @@ def _normalize_xml_tag(tag: str) -> str:
     if "}" in tag:
         tag = tag.split("}", maxsplit=1)[1]
     return tag.strip()
+
+
+def _prepare_csv_text(text: str) -> str:
+    lines = text.splitlines()
+    if not lines:
+        return text
+
+    start_index = 0
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        normalized = stripped.lower()
+        if normalized.startswith("sep="):
+            start_index = index + 1
+            continue
+        if _looks_like_csv_header(stripped):
+            start_index = index
+            break
+    prepared = "\n".join(lines[start_index:]).strip()
+    return prepared or text.strip()
+
+
+def _looks_like_csv_header(line: str) -> bool:
+    for delimiter in (",", ";", "\t", "|"):
+        if delimiter not in line:
+            continue
+        columns = [part.strip().strip('"').strip("'") for part in line.split(delimiter)]
+        if detect_apr_key(columns):
+            return True
+    return False
+
+
+def _find_repeated_record_elements(root: ET.Element) -> list[ET.Element]:
+    best: list[ET.Element] = []
+    for parent in root.iter():
+        children = list(parent)
+        if len(children) < 2:
+            continue
+        grouped: dict[str, list[ET.Element]] = {}
+        for child in children:
+            grouped.setdefault(_normalize_xml_tag(child.tag), []).append(child)
+        for elements in grouped.values():
+            if len(elements) < 2:
+                continue
+            if any(detect_apr_key(_element_to_payload(element).keys()) for element in elements):
+                if len(elements) > len(best):
+                    best = elements
+    return best
+
+
+def _find_elements_with_apr_id(root: ET.Element) -> list[ET.Element]:
+    candidates: list[ET.Element] = []
+    for element in root.iter():
+        payload = _element_to_payload(element)
+        if payload and detect_apr_key(payload.keys()):
+            candidates.append(element)
+    if not candidates:
+        return []
+
+    filtered: list[ET.Element] = []
+    for candidate in candidates:
+        if any(candidate in list(parent) for parent in candidates if parent is not candidate):
+            continue
+        filtered.append(candidate)
+    return filtered

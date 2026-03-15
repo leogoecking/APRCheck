@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -9,8 +9,13 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.models.entities import ComparisonRun, ImportBatch
 from app.schemas.forms import ImportBatchInput
-from app.services.comparison_service import extract_visual_fields
-from app.services.import_service import ImportValidationError, create_import_batch
+from app.services.comparison_service import rerun_latest_comparisons_for_competencias, extract_visual_fields
+from app.services.import_service import (
+    ImportValidationError,
+    create_import_batch,
+    delete_import_batch,
+    get_import_batch,
+)
 from app.utils.web import pop_flash, set_flash
 
 
@@ -94,3 +99,52 @@ def import_file(
 
     set_flash(request, "success", "Arquivo importado com sucesso.")
     return RedirectResponse(url=f"/imports?batch_id={batch.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/{batch_id}/delete")
+def import_batch_delete_confirm(
+    request: Request,
+    batch_id: int,
+    db: Session = Depends(get_db),
+) -> object:
+    batch = get_import_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote não encontrado.")
+    context = {
+        "request": request,
+        "batch": batch,
+        "form_errors": [],
+        "flash": pop_flash(request),
+    }
+    return request.app.state.templates.TemplateResponse(request, "imports/delete.html", context)
+
+
+@router.post("/{batch_id}/delete")
+def import_batch_delete(
+    request: Request,
+    batch_id: int,
+    confirm_batch_id: str = Form(...),
+    db: Session = Depends(get_db),
+) -> object:
+    batch = get_import_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote não encontrado.")
+    if confirm_batch_id.strip() != str(batch.id):
+        context = {
+            "request": request,
+            "batch": batch,
+            "form_errors": ["Confirmação inválida. Digite exatamente o ID do lote."],
+            "flash": None,
+        }
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "imports/delete.html",
+            context,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    competencia = batch.competencia
+    delete_import_batch(db, batch)
+    rerun_latest_comparisons_for_competencias(db, {competencia})
+    set_flash(request, "success", "Lote importado excluído com sucesso.")
+    return RedirectResponse(url="/imports", status_code=status.HTTP_303_SEE_OTHER)

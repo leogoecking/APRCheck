@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Excluir Lote{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Excluir lote importado</h1>
+        <p>Confirme a exclusão. O lote, os registros importados e as comparações vinculadas a ele serão removidos.</p>
+    </div>
+</section>
+
+<section class="card">
+    {% if form_errors %}
+    <div class="alert alert-error">
+        {% for error in form_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <p><strong>Lote:</strong> #{{ batch.id }}</p>
+    <p><strong>Arquivo:</strong> {{ batch.nome_arquivo }}</p>
+    <p><strong>Competência:</strong> {{ batch.competencia }}</p>
+    <p><strong>Registros:</strong> {{ batch.total_registros }}</p>
+    <form method="post" action="/imports/{{ batch.id }}/delete" class="form-grid">
+        <label class="full-width">Digite o ID do lote para confirmar
+            <input type="text" name="confirm_batch_id" placeholder="{{ batch.id }}" required>
+        </label>
+        <div class="actions full-width">
+            <button class="button danger-button" type="submit">Excluir lote</button>
+            <a class="button button-secondary" href="/imports?batch_id={{ batch.id }}">Cancelar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

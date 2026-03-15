@@ -51,7 +51,10 @@
                         <td>{{ batch.nome_arquivo }}</td>
                         <td>{{ batch.competencia }}</td>
                         <td>{{ batch.total_registros }}</td>
-                        <td><a href="/imports?batch_id={{ batch.id }}">Detalhes</a></td>
+                        <td class="actions">
+                            <a href="/imports?batch_id={{ batch.id }}">Detalhes</a>
+                            <a href="/imports/{{ batch.id }}/delete">Excluir</a>
+                        </td>
                     </tr>
                     {% else %}
                     <tr><td colspan="5" class="muted">Nenhum lote importado.</td></tr>
@@ -77,6 +80,7 @@
                 <input type="hidden" name="competencia" value="{{ selected_batch.competencia }}">
                 <button class="button button-secondary" type="submit">Conciliar competência</button>
             </form>
+            <a class="button danger-button" href="/imports/{{ selected_batch.id }}/delete">Excluir lote</a>
         </div>
     </div>
     <div class="metrics-row">
