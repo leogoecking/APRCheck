@@ -21,40 +21,50 @@
         <input type="hidden" name="sort" value="{{ sort }}">
         <input type="hidden" name="direction" value="{{ direction }}">
         <button class="button" type="submit">Aplicar filtros</button>
-        <a class="button button-secondary" href="/divergences/export?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}">Exportar CSV</a>
+        <a class="button" href="/divergences/export.xlsx?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}">Exportar XLSX</a>
+        <a class="button button-secondary" href="/divergences/export?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}">CSV simples</a>
     </form>
     <p class="muted">Página {{ pagination.page }} de {{ pagination.total_pages }} | {{ pagination.total_items }} item(ns)</p>
 </section>
 
 <section class="card">
+    <div class="section-header">
+        <div>
+            <h2>Lista de Divergências</h2>
+            <p class="muted">Visual consolidado por mês, com foco em localizar rapidamente o APR ID e a categoria do problema.</p>
+        </div>
+    </div>
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=competencia&direction={% if sort == 'competencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Mês</a></th>
-                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=comparison_id&direction={% if sort == 'comparison_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">Comparação</a></th>
                     <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">APR ID</a></th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=competencia&direction={% if sort == 'competencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Mês</a></th>
                     <th>Assunto</th>
                     <th>Data de abertura</th>
                     <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=categoria&direction={% if sort == 'categoria' and direction == 'asc' %}desc{% else %}asc{% endif %}">Categoria</a></th>
-                    <th>Origem</th>
                     <th>Detalhe</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item, comparison_run, batch, preview in items %}
                 <tr>
+                    <td><strong>{{ item.apr_id or 'Sem ID' }}</strong></td>
                     <td><strong>{{ comparison_run.competencia }}</strong></td>
-                    <td><a href="/comparisons/{{ comparison_run.id }}">#{{ comparison_run.id }}</a></td>
-                    <td>{{ item.apr_id or 'Sem ID' }}</td>
                     <td>{{ preview.assunto or '-' }}</td>
                     <td>{{ preview.data_abertura or '-' }}</td>
                     <td>{{ item.status_comparacao }}</td>
-                    <td>{{ item.origem }}</td>
                     <td>{{ item.detalhe or '' }}</td>
+                    <td class="actions">
+                        {% if item.apr_id %}
+                        <a href="/manual-aprs?q={{ item.apr_id }}">Buscar manual</a>
+                        {% endif %}
+                        <a href="/comparisons/{{ comparison_run.id }}?status={{ item.status_comparacao }}">Abrir comparação</a>
+                    </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="8" class="muted">Nenhuma divergência encontrada.</td></tr>
+                <tr><td colspan="7" class="muted">Nenhuma divergência encontrada.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

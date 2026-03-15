@@ -2,16 +2,24 @@ from __future__ import annotations
 
 from io import BytesIO
 
+from openpyxl import load_workbook
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
 from app.models.entities import ComparisonRun, ManualAPRAuditLog
+from app.services.comparison_service import list_divergence_items
 from app.routers.comparisons import (
     comparison_detail,
     execute_comparison,
     execute_comparison_by_competencia,
 )
-from app.routers.divergences import divergences_page, export_divergences
+from app.routers.divergences import (
+    build_divergence_export_rows,
+    build_divergence_xlsx_bytes,
+    divergences_page,
+    export_divergences,
+    export_divergences_xlsx,
+)
 from app.routers.history import history_page
 from app.routers.imports import import_batch_delete, import_batch_delete_confirm, import_file
 from app.routers.manual_aprs import (
@@ -41,6 +49,7 @@ def make_request(app, method: str = "GET", path: str = "/") -> Request:
             "app": app,
         }
     )
+
 
 
 def test_manual_apr_create_and_duplicate(app_module):
@@ -241,6 +250,11 @@ def test_import_run_comparison_and_export(app_module):
         )
         assert comparison.status_code == 303
         assert comparison.headers["location"] == "/comparisons/1"
+        execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
+            db=db,
+        )
 
         detail = comparison_detail(
             make_request(app_module.app, path="/comparisons/1"),
@@ -260,12 +274,57 @@ def test_import_run_comparison_and_export(app_module):
             db=db,
         )
         assert divergences.status_code == 200
-        assert "APR-1" not in divergences.body.decode()
+        divergences_body = divergences.body.decode()
+        assert "APR-1" not in divergences_body
+        assert "Buscar manual" in divergences_body
+        assert "Abrir comparação" in divergences_body
+        assert "Mês:" not in divergences_body
+        assert "Exportar XLSX" in divergences_body
 
         export = export_divergences(competencia="2026-03", db=db)
         assert export.status_code == 200
         assert "text/csv" in export.headers["content-type"]
         assert "divergencias.csv" in export.headers["content-disposition"]
+        export_rows = build_divergence_export_rows(
+            list_divergence_items(db, competencia="2026-03")
+        )
+        assert export_rows[0] == [
+            "apr_id",
+            "competencia",
+            "assunto",
+            "data_abertura",
+            "categoria",
+            "detalhe",
+        ]
+
+        xlsx_export = export_divergences_xlsx(competencia="2026-03", db=db)
+        assert xlsx_export.status_code == 200
+        assert (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            in xlsx_export.headers["content-type"]
+        )
+        assert "divergencias.xlsx" in xlsx_export.headers["content-disposition"]
+
+        workbook = load_workbook(
+            BytesIO(build_divergence_xlsx_bytes(list_divergence_items(db, competencia="2026-03")))
+        )
+        worksheet = workbook.active
+        assert [cell.value for cell in worksheet[1]] == [
+            "APR ID",
+            "Mês",
+            "Assunto",
+            "Data de abertura",
+            "Categoria",
+            "Detalhe",
+        ]
+        exported_rows = list(worksheet.iter_rows(min_row=2, values_only=True))
+        apr_3_row = next(
+            row for row in exported_rows if row[0] == "APR-3" and row[4] == "faltando_no_manual"
+        )
+        assert apr_3_row[1] == "2026-03"
+        assert apr_3_row[2] == "Faltando manual valido"
+        assert apr_3_row[4] == "faltando_no_manual"
+        assert apr_3_row[5] == "ID encontrado no escopo importado e ausente no cadastro manual da competência."
     finally:
         db.close()
 

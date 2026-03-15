@@ -7,6 +7,7 @@ from app.models.entities import ComparisonRun, ManualAPR, ManualAPRAuditLog
 from app.schemas.forms import ImportBatchInput, ManualAPRInput
 from app.services.comparison_service import (
     build_import_preview_map,
+    ensure_latest_competencia_runs,
     extract_visual_fields,
     list_divergence_items,
     run_batch_comparison,
@@ -429,5 +430,46 @@ def test_list_divergence_items_returns_latest_competencia_view(app_module):
         assert len(items) == 2
         assert {item[0].apr_id for item in items} == {"APR-002", "APR-003"}
         assert all(item[1].scope_type == "competencia" for item in items)
+    finally:
+        db.close()
+
+
+def test_ensure_latest_competencia_runs_creates_monthly_view_from_batch_runs(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-001",
+                data_referencia=date(2026, 3, 2),
+            ),
+        )
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-002,Faltando manual\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        batch_run = run_batch_comparison(db, 1)
+        assert batch_run is not None
+        assert db.query(ComparisonRun).filter_by(scope_type="competencia").count() == 0
+
+        refreshed = ensure_latest_competencia_runs(db, competencia="2026-03")
+
+        assert len(refreshed) == 1
+        assert refreshed[0].scope_type == "competencia"
+        assert refreshed[0].competencia == "2026-03"
+        assert db.query(ComparisonRun).filter_by(scope_type="competencia").count() == 1
     finally:
         db.close()

@@ -140,6 +140,11 @@ a:hover {
     color: var(--muted);
 }
 
+.small-text {
+    font-size: 0.88rem;
+    margin-top: 6px;
+}
+
 .metrics-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

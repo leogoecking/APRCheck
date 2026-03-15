@@ -41,7 +41,8 @@ APRCheck/
 - Validação de IDs, tolerância a colunas extras e detecção de duplicados no lote.
 - Conciliação manual por lote ou por competência baseada somente em `apr_id`.
 - Campos visuais de apoio como `assunto` e `data de abertura`, sem impacto na lógica de conciliação.
-- Tela de divergências com filtros, paginação e exportação CSV.
+- Tela de divergências com filtros, paginação, exportação `XLSX` principal e `CSV` simples.
+- Atualização automática da visão consolidada por competência ao abrir/exportar divergências, mesmo quando só existem execuções por lote.
 - Histórico preservado de importações e comparações, sem sobrescrever execuções anteriores.
 - Trilho de auditoria para criação, edição, importação em lote e exclusão da base manual.
 
@@ -50,7 +51,7 @@ APRCheck/
 1. Cadastre APRs manuais em `/manual-aprs`, individualmente ou por importação manual/CSV.
 2. Importe os lotes externos em `/imports`, informando a competência.
 3. Execute a conciliação por lote ou por competência.
-4. Analise divergências em `/divergences`.
+4. Analise divergências em `/divergences` e use `Exportar XLSX` para uma planilha mais legível.
 5. Consulte histórico e auditoria em `/history`.
 
 ## Instalação no Debian

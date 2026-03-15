@@ -254,6 +254,57 @@ def rerun_latest_comparisons_for_competencias(
     return results
 
 
+def ensure_latest_competencia_runs(
+    db: Session,
+    *,
+    competencia: str | None = None,
+) -> list[ComparisonRun]:
+    competencias = (
+        [competencia]
+        if competencia
+        else list(
+            db.scalars(
+                select(ImportBatch.competencia)
+                .distinct()
+                .order_by(ImportBatch.competencia.asc())
+            )
+        )
+    )
+    results: list[ComparisonRun] = []
+    for item in competencias:
+        if not item:
+            continue
+        latest_batch_run = db.scalar(
+            select(ComparisonRun)
+            .where(
+                ComparisonRun.scope_type == "batch",
+                ComparisonRun.competencia == item,
+            )
+            .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
+        )
+        latest_competencia_run = db.scalar(
+            select(ComparisonRun)
+            .where(
+                ComparisonRun.scope_type == "competencia",
+                ComparisonRun.scope_value == item,
+            )
+            .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
+        )
+
+        needs_refresh = latest_competencia_run is None
+        if latest_batch_run is not None and latest_competencia_run is not None:
+            needs_refresh = (
+                latest_batch_run.created_at > latest_competencia_run.created_at
+                or latest_batch_run.id > latest_competencia_run.id
+            )
+
+        if needs_refresh:
+            comparison_run = run_competencia_comparison(db, item)
+            if comparison_run is not None:
+                results.append(comparison_run)
+    return results
+
+
 def competencia_from_date(value: date | None) -> str | None:
     if value is None:
         return None
