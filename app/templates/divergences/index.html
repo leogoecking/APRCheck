@@ -4,20 +4,20 @@
 <section class="page-header">
     <div>
         <h1>Divergências</h1>
-        <p>Filtre por competência, categoria ou ID e exporte o resultado atual em CSV.</p>
+        <p>Filtre principalmente por APR ID e acompanhe as divergências consolidadas por mês.</p>
     </div>
 </section>
 
 <section class="card">
     <form method="get" action="/divergences" class="inline-form inline-form-wide">
-        <input type="text" name="competencia" placeholder="Competência" value="{{ filters.competencia or '' }}">
+        <input type="text" name="apr_id" placeholder="APR ID" value="{{ filters.apr_id or '' }}">
+        <input type="text" name="competencia" placeholder="Mês / competência" value="{{ filters.competencia or '' }}">
         <select name="categoria">
             <option value="">Todas as categorias</option>
             {% for option in ['faltando_no_manual', 'faltando_no_importado', 'duplicado', 'invalido'] %}
             <option value="{{ option }}" {% if filters.categoria == option %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
         </select>
-        <input type="text" name="apr_id" placeholder="APR ID" value="{{ filters.apr_id or '' }}">
         <input type="hidden" name="sort" value="{{ sort }}">
         <input type="hidden" name="direction" value="{{ direction }}">
         <button class="button" type="submit">Aplicar filtros</button>
@@ -31,8 +31,7 @@
         <table>
             <thead>
                 <tr>
-                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=competencia&direction={% if sort == 'competencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Competência</a></th>
-                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=batch_id&direction={% if sort == 'batch_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">Lote</a></th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=competencia&direction={% if sort == 'competencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Mês</a></th>
                     <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=comparison_id&direction={% if sort == 'comparison_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">Comparação</a></th>
                     <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">APR ID</a></th>
                     <th>Assunto</th>
@@ -45,8 +44,7 @@
             <tbody>
                 {% for item, comparison_run, batch, preview in items %}
                 <tr>
-                    <td>{{ comparison_run.competencia }}</td>
-                    <td>#{{ batch.id }}</td>
+                    <td><strong>{{ comparison_run.competencia }}</strong></td>
                     <td><a href="/comparisons/{{ comparison_run.id }}">#{{ comparison_run.id }}</a></td>
                     <td>{{ item.apr_id or 'Sem ID' }}</td>
                     <td>{{ preview.assunto or '-' }}</td>
@@ -56,7 +54,7 @@
                     <td>{{ item.detalhe or '' }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" class="muted">Nenhuma divergência encontrada.</td></tr>
+                <tr><td colspan="8" class="muted">Nenhuma divergência encontrada.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

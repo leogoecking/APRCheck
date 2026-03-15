@@ -8,6 +8,7 @@ from app.schemas.forms import ImportBatchInput, ManualAPRInput
 from app.services.comparison_service import (
     build_import_preview_map,
     extract_visual_fields,
+    list_divergence_items,
     run_batch_comparison,
     run_competencia_comparison,
 )
@@ -388,5 +389,45 @@ def test_competencia_comparison_combines_batches_and_detects_cross_batch_duplica
         assert result.total_faltando_manual == 1
         assert result.total_faltando_importado == 1
         assert result.total_duplicados == 1
+    finally:
+        db.close()
+
+
+def test_list_divergence_items_returns_latest_competencia_view(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-001",
+                data_referencia=date(2026, 3, 2),
+            ),
+        )
+        for filename, content in (
+            ("lote-a.csv", b"apr_id,descricao\nAPR-001,Conciliado\nAPR-002,Faltando manual\n"),
+            ("lote-b.csv", b"apr_id,descricao\nAPR-003,Faltando manual\n"),
+        ):
+            create_import_batch(
+                db,
+                type(
+                    "UploadStub",
+                    (),
+                    {
+                        "filename": filename,
+                        "file": type("FileStub", (), {"read": lambda self, data=content: data})(),
+                    },
+                )(),
+                ImportBatchInput(competencia="2026-03"),
+            )
+
+        run_batch_comparison(db, 1)
+        run_batch_comparison(db, 2)
+        run_competencia_comparison(db, "2026-03")
+
+        items = list_divergence_items(db, competencia="2026-03")
+
+        assert len(items) == 2
+        assert {item[0].apr_id for item in items} == {"APR-002", "APR-003"}
+        assert all(item[1].scope_type == "competencia" for item in items)
     finally:
         db.close()

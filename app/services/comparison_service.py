@@ -277,7 +277,8 @@ def list_divergence_items(
 ) -> list[tuple[ComparisonItem, ComparisonRun, ImportBatch, dict[str, str]]]:
     latest_runs_subquery = (
         select(func.max(ComparisonRun.id).label("id"))
-        .group_by(ComparisonRun.scope_type, ComparisonRun.scope_value)
+        .where(ComparisonRun.scope_type == "competencia")
+        .group_by(ComparisonRun.scope_value)
         .subquery()
     )
     sort_map = {

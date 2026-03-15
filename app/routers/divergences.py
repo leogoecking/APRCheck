@@ -34,7 +34,11 @@ def divergences_page(
     page: int = 1,
     db: Session = Depends(get_db),
 ) -> object:
-    filters = DivergenceFilters(competencia=competencia, categoria=categoria, apr_id=apr_id)
+    filters = DivergenceFilters(
+        competencia=competencia,
+        categoria=categoria,
+        apr_id=apr_id,
+    )
     safe_sort, safe_direction = _divergence_sort_state(sort, direction)
     all_items = list_divergence_items(
         db,
@@ -64,7 +68,11 @@ def export_divergences(
     apr_id: str | None = None,
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    filters = DivergenceFilters(competencia=competencia, categoria=categoria, apr_id=apr_id)
+    filters = DivergenceFilters(
+        competencia=competencia,
+        categoria=categoria,
+        apr_id=apr_id,
+    )
     items = list_divergence_items(
         db,
         competencia=filters.competencia,
@@ -76,7 +84,6 @@ def export_divergences(
     writer.writerow(
         [
             "competencia",
-            "lote_id",
             "comparison_run_id",
             "apr_id",
             "assunto",
@@ -90,7 +97,6 @@ def export_divergences(
         writer.writerow(
             [
                 comparison_run.competencia,
-                batch.id,
                 comparison_run.id,
                 item.apr_id or "",
                 preview.get("assunto", ""),

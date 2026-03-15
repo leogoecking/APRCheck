@@ -270,6 +270,83 @@ def test_import_run_comparison_and_export(app_module):
         db.close()
 
 
+def test_divergences_prioritize_apr_id_and_month_view(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-1",
+            data_referencia="2026-03-01",
+            responsavel="Equipe",
+            descricao=None,
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+
+        for filename, content in (
+            ("lote-a.csv", b"apr_id,descricao\nAPR-1,Conciliado\nAPR-2,Faltando manual\n"),
+            ("lote-b.csv", b"apr_id,descricao\nAPR-3,Faltando manual\n"),
+        ):
+            response = import_file(
+                make_request(app_module.app, method="POST", path="/imports"),
+                competencia="2026-03",
+                arquivo=UploadFile(filename=filename, file=BytesIO(content)),
+                db=db,
+            )
+            assert response.status_code == 303
+
+        execute_comparison(
+            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
+            batch_id=1,
+            db=db,
+        )
+        execute_comparison(
+            make_request(app_module.app, method="POST", path="/comparisons/run/2"),
+            batch_id=2,
+            db=db,
+        )
+        execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
+            db=db,
+        )
+
+        apr_filtered = divergences_page(
+            make_request(app_module.app, path="/divergences"),
+            competencia="2026-03",
+            apr_id="APR-2",
+            db=db,
+        )
+        apr_body = apr_filtered.body.decode()
+        assert apr_filtered.status_code == 200
+        assert "APR-2" in apr_body
+        assert "APR-3" not in apr_body
+        assert "Mês" in apr_body
+        assert "Lote" not in apr_body
+
+        month_filtered = divergences_page(
+            make_request(app_module.app, path="/divergences"),
+            competencia="2026-03",
+            db=db,
+        )
+        month_body = month_filtered.body.decode()
+        assert month_filtered.status_code == 200
+        assert "2026-03" in month_body
+        assert "Escopo" not in month_body
+
+        export = export_divergences(
+            competencia="2026-03",
+            apr_id="APR-2",
+            db=db,
+        )
+        assert export.status_code == 200
+        assert "text/csv" in export.headers["content-type"]
+        assert "divergencias.csv" in export.headers["content-disposition"]
+    finally:
+        db.close()
+
+
 def test_import_batch_delete_requires_confirmation_and_updates_remaining_competencia_runs(app_module):
     db = app_module.db_module.SessionLocal()
     try:
@@ -376,6 +453,11 @@ def test_divergences_and_history_support_pagination(app_module):
                 batch_id=index + 1,
                 db=db,
             )
+        execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
+            db=db,
+        )
 
         divergences = divergences_page(
             make_request(app_module.app, path="/divergences"),
