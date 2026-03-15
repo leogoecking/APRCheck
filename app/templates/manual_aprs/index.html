@@ -44,21 +44,55 @@
     </section>
 
     <section class="card">
+        <h2>Importação manual em lote</h2>
+        <p class="muted">Cole um APR ID por linha ou use cabeçalhos como <code>apr_id;data_abertura;assunto;responsavel;status</code>.</p>
+        {% if import_errors %}
+        <div class="alert alert-error">
+            {% for error in import_errors %}
+            <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form method="post" action="/manual-aprs/import" class="form-grid">
+            <label class="full-width">Linhas para importação
+                <textarea name="import_text" rows="10" placeholder="APR-100&#10;APR-101&#10;&#10;ou&#10;apr_id;data_abertura;assunto&#10;APR-200;11/03/2026 13:10;MANUTENCAO" required>{{ import_form_data }}</textarea>
+            </label>
+            <div class="actions full-width">
+                <button class="button" type="submit">Importar em lote</button>
+            </div>
+        </form>
+        <hr>
+        <form method="post" action="/manual-aprs/import-csv" enctype="multipart/form-data" class="form-grid">
+            <label class="full-width">Arquivo CSV da base manual
+                <input type="file" name="arquivo" accept=".csv,.tsv,.txt,text/csv,text/plain" required>
+            </label>
+            <div class="actions full-width">
+                <button class="button button-secondary" type="submit">Importar CSV</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
         <div class="section-header">
             <h2>APRs cadastradas</h2>
             <form method="get" action="/manual-aprs" class="inline-form">
                 <input type="text" name="q" placeholder="Buscar por ID" value="{{ query }}">
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="direction" value="{{ direction }}">
                 <button class="button button-secondary" type="submit">Buscar</button>
+                <a class="button button-secondary" href="/manual-aprs/export?q={{ query }}&sort={{ sort }}&direction={{ direction }}">Exportar CSV</a>
             </form>
         </div>
+        <p class="muted">Página {{ pagination.page }} de {{ pagination.total_pages }} | {{ pagination.total_items }} APR(s)</p>
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>APR ID</th>
-                        <th>Data</th>
-                        <th>Responsável</th>
-                        <th>Status</th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">APR ID</a></th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=data_referencia&direction={% if sort == 'data_referencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Data</a></th>
+                        <th>Assunto</th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=responsavel&direction={% if sort == 'responsavel' and direction == 'asc' %}desc{% else %}asc{% endif %}">Responsável</a></th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=status&direction={% if sort == 'status' and direction == 'asc' %}desc{% else %}asc{% endif %}">Status</a></th>
                         <th></th>
                     </tr>
                 </thead>
@@ -67,16 +101,30 @@
                     <tr>
                         <td>{{ item.apr_id }}</td>
                         <td>{{ item.data_referencia or '' }}</td>
+                        <td>{{ item.descricao or '-' }}</td>
                         <td>{{ item.responsavel or '' }}</td>
                         <td>{{ item.status or '' }}</td>
-                        <td><a href="/manual-aprs/{{ item.id }}/edit">Editar</a></td>
+                        <td class="actions">
+                            <a href="/manual-aprs/{{ item.id }}/edit">Editar</a>
+                            <a href="/manual-aprs/{{ item.id }}/delete">Excluir</a>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5" class="muted">Nenhuma APR manual encontrada.</td></tr>
+                    <tr><td colspan="6" class="muted">Nenhuma APR manual encontrada.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% if pagination.total_pages > 1 %}
+        <div class="actions">
+            {% if pagination.has_previous %}
+            <a class="button button-secondary" href="/manual-aprs?q={{ query }}&sort={{ sort }}&direction={{ direction }}&page={{ pagination.previous_page }}">Anterior</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a class="button button-secondary" href="/manual-aprs?q={{ query }}&sort={{ sort }}&direction={{ direction }}&page={{ pagination.next_page }}">Próxima</a>
+            {% endif %}
+        </div>
+        {% endif %}
     </section>
 </div>
 {% endblock %}

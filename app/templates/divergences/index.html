@@ -18,9 +18,12 @@
             {% endfor %}
         </select>
         <input type="text" name="apr_id" placeholder="APR ID" value="{{ filters.apr_id or '' }}">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="direction" value="{{ direction }}">
         <button class="button" type="submit">Aplicar filtros</button>
         <a class="button button-secondary" href="/divergences/export?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}">Exportar CSV</a>
     </form>
+    <p class="muted">Página {{ pagination.page }} de {{ pagination.total_pages }} | {{ pagination.total_items }} item(ns)</p>
 </section>
 
 <section class="card">
@@ -28,31 +31,45 @@
         <table>
             <thead>
                 <tr>
-                    <th>Competência</th>
-                    <th>Lote</th>
-                    <th>Comparação</th>
-                    <th>APR ID</th>
-                    <th>Categoria</th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=competencia&direction={% if sort == 'competencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Competência</a></th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=batch_id&direction={% if sort == 'batch_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">Lote</a></th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=comparison_id&direction={% if sort == 'comparison_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">Comparação</a></th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">APR ID</a></th>
+                    <th>Assunto</th>
+                    <th>Data de abertura</th>
+                    <th><a href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort=categoria&direction={% if sort == 'categoria' and direction == 'asc' %}desc{% else %}asc{% endif %}">Categoria</a></th>
                     <th>Origem</th>
                     <th>Detalhe</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item, comparison_run, batch in items %}
+                {% for item, comparison_run, batch, preview in items %}
                 <tr>
                     <td>{{ comparison_run.competencia }}</td>
                     <td>#{{ batch.id }}</td>
                     <td><a href="/comparisons/{{ comparison_run.id }}">#{{ comparison_run.id }}</a></td>
                     <td>{{ item.apr_id or 'Sem ID' }}</td>
+                    <td>{{ preview.assunto or '-' }}</td>
+                    <td>{{ preview.data_abertura or '-' }}</td>
                     <td>{{ item.status_comparacao }}</td>
                     <td>{{ item.origem }}</td>
                     <td>{{ item.detalhe or '' }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7" class="muted">Nenhuma divergência encontrada.</td></tr>
+                <tr><td colspan="9" class="muted">Nenhuma divergência encontrada.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% if pagination.total_pages > 1 %}
+    <div class="actions">
+        {% if pagination.has_previous %}
+        <a class="button button-secondary" href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort={{ sort }}&direction={{ direction }}&page={{ pagination.previous_page }}">Anterior</a>
+        {% endif %}
+        {% if pagination.has_next %}
+        <a class="button button-secondary" href="/divergences?competencia={{ filters.competencia or '' }}&categoria={{ filters.categoria or '' }}&apr_id={{ filters.apr_id or '' }}&sort={{ sort }}&direction={{ direction }}&page={{ pagination.next_page }}">Próxima</a>
+        {% endif %}
+    </div>
+    {% endif %}
 </section>
 {% endblock %}

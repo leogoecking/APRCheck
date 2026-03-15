@@ -76,6 +76,9 @@ class ComparisonRun(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey("import_batches.id"), nullable=False, index=True)
     competencia: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    scope_type: Mapped[str] = mapped_column(String(20), nullable=False, default="batch", index=True)
+    scope_value: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    source_batch_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_manual: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_importado: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_conciliado: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -109,5 +112,18 @@ class ComparisonItem(TimestampMixin, Base):
     comparison_run: Mapped["ComparisonRun"] = relationship(back_populates="items")
 
 
+class ManualAPRAuditLog(TimestampMixin, Base):
+    __tablename__ = "manual_apr_audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    action: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    apr_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    manual_apr_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    competencia: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    detalhe: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 Index("ix_imported_aprs_batch_id_apr_id", ImportedAPR.batch_id, ImportedAPR.apr_id)
 Index("ix_comparison_items_run_status", ComparisonItem.comparison_run_id, ComparisonItem.status_comparacao)
+Index("ix_comparison_runs_scope", ComparisonRun.scope_type, ComparisonRun.scope_value, ComparisonRun.created_at)
+Index("ix_manual_apr_audit_logs_action_created", ManualAPRAuditLog.action, ManualAPRAuditLog.created_at)

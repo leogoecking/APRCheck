@@ -37,9 +37,9 @@ APRCheck/
 - Cadastro manual com criação, listagem, busca por ID e edição.
 - Importação de CSV/XML com competência manual por lote.
 - Validação de IDs, tolerância a colunas extras e detecção de duplicados no lote.
-- Conciliação manual por lote baseada somente em `apr_id`.
+- Conciliação manual por lote ou por competência baseada somente em `apr_id`.
 - Tela de divergências com filtros e exportação CSV.
-- Histórico de importações e comparações.
+- Histórico preservado de importações e comparações, sem sobrescrever execuções anteriores.
 
 ## Instalação no Debian
 
@@ -122,7 +122,7 @@ sudo systemctl status apr-conciliador
 ## Rodando os testes
 
 ```bash
-pytest
+.venv/bin/pytest
 ```
 
 ## Melhorias futuras

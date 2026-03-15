@@ -6,7 +6,7 @@ O Conciliador de APR é um sistema web local para cadastrar APRs manualmente, im
 
 1. Cadastrar APRs manualmente em `/manual-aprs`.
 2. Importar um lote em `/imports`, informando a competência.
-3. Executar a conciliação manualmente para o lote importado.
+3. Executar a conciliação manualmente por lote ou por competência.
 4. Consultar divergências em `/divergences`.
 5. Acompanhar histórico em `/history`.
 

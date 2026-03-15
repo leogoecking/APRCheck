@@ -7,6 +7,8 @@
     --muted: #736657;
     --accent: #1f6f62;
     --accent-dark: #154f47;
+    --danger: #b2452f;
+    --danger-dark: #8e3322;
     --success-bg: #e5f5ee;
     --error-bg: #f9e5e2;
 }
@@ -236,6 +238,14 @@ textarea {
 
 .button-secondary:hover {
     background: #f3ece2;
+}
+
+.danger-button {
+    background: var(--danger);
+}
+
+.danger-button:hover {
+    background: var(--danger-dark);
 }
 
 .alert {

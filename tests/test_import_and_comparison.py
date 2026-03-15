@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from datetime import date
+
+from app.models.entities import ComparisonRun, ManualAPR, ManualAPRAuditLog
 from app.schemas.forms import ImportBatchInput, ManualAPRInput
-from app.models.entities import ComparisonRun
-from app.services.comparison_service import run_comparison
+from app.services.comparison_service import (
+    extract_visual_fields,
+    run_batch_comparison,
+    run_competencia_comparison,
+)
 from app.services.import_service import create_import_batch, parse_csv_bytes, parse_xml_bytes
-from app.services.manual_apr_service import create_manual_apr
+from app.services.manual_apr_service import create_manual_apr, import_manual_aprs_from_text
 
 
 def test_parse_csv_detects_alternate_header_and_duplicates():
@@ -49,6 +55,34 @@ def test_parse_csv_accepts_tab_delimited_id_header():
     assert rows[1].is_valid is True
 
 
+def test_extract_visual_fields_reads_assunto_and_open_date_without_time():
+    preview = extract_visual_fields(
+        '{"ID":"238474","Assunto":"MANUTENCAO CAIXA NAP","Abertura":"11/03/2026 13:10"}'
+    )
+
+    assert preview["assunto"] == "MANUTENCAO CAIXA NAP"
+    assert preview["data_abertura"] == "11/03/2026"
+
+
+def test_manual_bulk_import_accepts_structured_text_and_maps_visual_fields(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        result = import_manual_aprs_from_text(
+            db,
+            "apr_id;data_abertura;assunto;responsavel;status\n"
+            "APR-700;11/03/2026 13:10;MANUTENCAO;HARISSON;aberto\n",
+        )
+
+        assert result.created_count == 1
+        manual = db.query(ManualAPR).filter_by(apr_id="APR-700").one()
+        audit = db.query(ManualAPRAuditLog).filter_by(action="bulk_import").one()
+        assert manual.descricao == "MANUTENCAO"
+        assert str(manual.data_referencia) == "2026-03-11"
+        assert "criadas=1" in (audit.detalhe or "")
+    finally:
+        db.close()
+
+
 def test_parse_xml_detects_missing_id_and_duplicate():
     xml = b"""
     <root>
@@ -81,13 +115,14 @@ def test_parse_xml_accepts_attribute_and_nested_id_fields():
     assert rows[1].is_valid is True
 
 
-def test_comparison_uses_only_apr_id(app_module):
+def test_batch_comparison_uses_only_apr_id(app_module):
     db = app_module.db_module.SessionLocal()
     try:
         create_manual_apr(
             db,
             ManualAPRInput(
                 apr_id="APR-001",
+                data_referencia=date(2026, 3, 10),
                 responsavel="Equipe A",
                 descricao="Manual",
                 status="aberto",
@@ -97,6 +132,7 @@ def test_comparison_uses_only_apr_id(app_module):
             db,
             ManualAPRInput(
                 apr_id="APR-003",
+                data_referencia=date(2026, 3, 11),
                 responsavel="Equipe B",
                 descricao="Outro",
                 status="fechado",
@@ -112,12 +148,31 @@ def test_comparison_uses_only_apr_id(app_module):
             ImportBatchInput(competencia="2026-03"),
         )
 
-        result = run_comparison(db, batch.id)
+        result = run_batch_comparison(db, batch.id)
 
         assert result is not None
         assert result.total_conciliado == 1
         assert result.total_faltando_manual == 1
         assert result.total_faltando_importado == 1
+    finally:
+        db.close()
+
+
+def test_manual_create_generates_audit_log(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-AUDIT-1",
+                data_referencia=date(2026, 3, 12),
+                descricao="Teste",
+            ),
+        )
+
+        audit = db.query(ManualAPRAuditLog).filter_by(action="create", apr_id="APR-AUDIT-1").one()
+        assert audit.competencia == "2026-03"
+        assert "assunto=Teste" in (audit.detalhe or "")
     finally:
         db.close()
 
@@ -149,13 +204,14 @@ def test_create_import_batch_accepts_tsv_extension(app_module):
         db.close()
 
 
-def test_run_comparison_replaces_previous_run_for_same_batch(app_module):
+def test_batch_comparison_preserves_history_for_same_batch(app_module):
     db = app_module.db_module.SessionLocal()
     try:
         create_manual_apr(
             db,
             ManualAPRInput(
                 apr_id="APR-001",
+                data_referencia=date(2026, 3, 1),
                 responsavel="Equipe A",
             ),
         )
@@ -176,13 +232,81 @@ def test_run_comparison_replaces_previous_run_for_same_batch(app_module):
             ImportBatchInput(competencia="2026-03"),
         )
 
-        first_run = run_comparison(db, batch.id)
-        second_run = run_comparison(db, batch.id)
+        first_run = run_batch_comparison(db, batch.id)
+        second_run = run_batch_comparison(db, batch.id)
 
         assert first_run is not None
         assert second_run is not None
         runs = list(db.query(ComparisonRun).filter(ComparisonRun.batch_id == batch.id))
-        assert len(runs) == 1
-        assert runs[0].id == second_run.id
+        assert len(runs) == 2
+        assert runs[-1].id == second_run.id
+    finally:
+        db.close()
+
+
+def test_competencia_comparison_combines_batches_and_detects_cross_batch_duplicates(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-001",
+                data_referencia=date(2026, 3, 2),
+                responsavel="Equipe A",
+            ),
+        )
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-003",
+                data_referencia=date(2026, 3, 3),
+                responsavel="Equipe B",
+            ),
+        )
+
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote-a.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-001,Conciliado\nAPR-002,Primeiro\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote-b.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-002,Duplicado em outro lote\nAPR-004,Novo\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        result = run_competencia_comparison(db, "2026-03")
+
+        assert result is not None
+        assert result.scope_type == "competencia"
+        assert result.scope_value == "2026-03"
+        assert result.total_manual == 2
+        assert result.total_importado == 2
+        assert result.total_conciliado == 1
+        assert result.total_faltando_manual == 1
+        assert result.total_faltando_importado == 1
+        assert result.total_duplicados == 1
     finally:
         db.close()

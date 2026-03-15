@@ -22,6 +22,7 @@
     <h2>Última comparação</h2>
     {% if summary.latest_run %}
     <div class="metrics-row">
+        <div><span class="label">Escopo</span><strong>{{ summary.latest_run.scope_type }}</strong></div>
         <div><span class="label">Competência</span><strong>{{ summary.latest_run.competencia }}</strong></div>
         <div><span class="label">Lote</span><strong>#{{ summary.latest_run.batch_id }}</strong></div>
         <div><span class="label">Conciliado</span><strong>{{ summary.latest_run.total_conciliado }}</strong></div>

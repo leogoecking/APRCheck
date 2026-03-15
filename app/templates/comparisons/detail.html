@@ -4,7 +4,11 @@
 <section class="page-header">
     <div>
         <h1>Resultado da conciliação</h1>
-        <p>Lote #{{ comparison_run.batch_id }} | competência {{ comparison_run.competencia }}</p>
+        <p>
+            Escopo {{ comparison_run.scope_type }} |
+            competência {{ comparison_run.competencia }} |
+            lote de referência #{{ comparison_run.batch_id }}
+        </p>
     </div>
 </section>
 
@@ -18,6 +22,11 @@
         <div><span class="label">Duplicados</span><strong>{{ comparison_run.total_duplicados }}</strong></div>
         <div><span class="label">Inválidos</span><strong>{{ comparison_run.total_invalidos }}</strong></div>
     </div>
+    {% if comparison_run.scope_type == 'competencia' %}
+    <p class="muted">Lotes considerados: {% for batch_id in source_batch_ids %}#{{ batch_id }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% else %}
+    <p class="muted">Lote analisado: #{{ comparison_run.batch_id }}</p>
+    {% endif %}
 </section>
 
 <section class="card">
@@ -38,6 +47,8 @@
             <thead>
                 <tr>
                     <th>APR ID</th>
+                    <th>Assunto</th>
+                    <th>Data de abertura</th>
                     <th>Status</th>
                     <th>Origem</th>
                     <th>Detalhe</th>
@@ -45,14 +56,17 @@
             </thead>
             <tbody>
                 {% for item in items %}
+                {% set preview = preview_map.get(item.apr_id or '', {}) %}
                 <tr>
                     <td>{{ item.apr_id or 'Sem ID' }}</td>
+                    <td>{{ preview.assunto or '-' }}</td>
+                    <td>{{ preview.data_abertura or '-' }}</td>
                     <td>{{ item.status_comparacao }}</td>
                     <td>{{ item.origem }}</td>
                     <td>{{ item.detalhe or '' }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="muted">Nenhum item encontrado para o filtro aplicado.</td></tr>
+                <tr><td colspan="6" class="muted">Nenhum item encontrado para o filtro aplicado.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

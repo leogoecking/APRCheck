@@ -69,9 +69,15 @@
             <h2>Resumo do lote #{{ selected_batch.id }}</h2>
             <p class="muted">{{ selected_batch.nome_arquivo }} | competência {{ selected_batch.competencia }}</p>
         </div>
-        <form method="post" action="/comparisons/run/{{ selected_batch.id }}">
-            <button class="button" type="submit">Executar conciliação</button>
-        </form>
+        <div class="actions">
+            <form method="post" action="/comparisons/run/{{ selected_batch.id }}">
+                <button class="button" type="submit">Conciliar lote</button>
+            </form>
+            <form method="post" action="/comparisons/run-by-competencia">
+                <input type="hidden" name="competencia" value="{{ selected_batch.competencia }}">
+                <button class="button button-secondary" type="submit">Conciliar competência</button>
+            </form>
+        </div>
     </div>
     <div class="metrics-row">
         <div><span class="label">Registros</span><strong>{{ selected_batch.total_registros }}</strong></div>
@@ -79,14 +85,19 @@
         <div><span class="label">Inválidos</span><strong>{{ selected_batch.total_invalidos }}</strong></div>
         <div><span class="label">Duplicados</span><strong>{{ selected_batch.total_duplicados }}</strong></div>
     </div>
-    {% if selected_batch.comparison_runs %}
-    <p class="muted">Última comparação deste lote: <a href="/comparisons/{{ selected_batch.comparison_runs[0].id }}">abrir resultado</a>.</p>
+    {% if selected_batch_latest_batch_run %}
+    <p class="muted">Última comparação deste lote: <a href="/comparisons/{{ selected_batch_latest_batch_run.id }}">abrir resultado</a>.</p>
+    {% endif %}
+    {% if selected_batch_latest_competencia_run %}
+    <p class="muted">Última comparação da competência {{ selected_batch.competencia }}: <a href="/comparisons/{{ selected_batch_latest_competencia_run.id }}">abrir resultado consolidado</a>.</p>
     {% endif %}
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
                     <th>APR ID</th>
+                    <th>Assunto</th>
+                    <th>Data de abertura</th>
                     <th>Válido</th>
                     <th>Duplicado</th>
                     <th>Mensagem</th>
@@ -94,8 +105,11 @@
             </thead>
             <tbody>
                 {% for row in selected_batch.imported_aprs %}
+                {% set preview = selected_batch_preview_by_row_id.get(row.id, {}) %}
                 <tr>
                     <td>{{ row.apr_id or 'Sem ID' }}</td>
+                    <td>{{ preview.assunto or '-' }}</td>
+                    <td>{{ preview.data_abertura or '-' }}</td>
                     <td>{{ 'Sim' if row.is_valid else 'Não' }}</td>
                     <td>{{ 'Sim' if row.is_duplicate else 'Não' }}</td>
                     <td>{{ row.error_message or '' }}</td>

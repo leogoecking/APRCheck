@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Excluir APR Manual{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Excluir APR manual</h1>
+        <p>Confirme a exclusão. A conciliação das competências afetadas será recalculada.</p>
+    </div>
+</section>
+
+<section class="card">
+    {% if form_errors %}
+    <div class="alert alert-error">
+        {% for error in form_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <p><strong>APR ID:</strong> {{ manual_apr.apr_id }}</p>
+    <p><strong>Data:</strong> {{ manual_apr.data_referencia or '-' }}</p>
+    <p><strong>Assunto:</strong> {{ manual_apr.descricao or '-' }}</p>
+    <form method="post" action="/manual-aprs/{{ manual_apr.id }}/delete" class="form-grid">
+        <label class="full-width">Digite o APR ID para confirmar
+            <input type="text" name="confirm_apr_id" placeholder="{{ manual_apr.apr_id }}" required>
+        </label>
+        <div class="actions full-width">
+            <button class="button danger-button" type="submit">Excluir APR</button>
+            <a class="button button-secondary" href="/manual-aprs/{{ manual_apr.id }}/edit">Cancelar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
