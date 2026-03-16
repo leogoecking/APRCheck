@@ -1,499 +1,392 @@
 # AGENTS.md
 
-## Projeto
-Sistema local de conciliação de APRs para rodar em servidor com VM Debian.
+## Objective
+Act as a senior software engineer focused on finding real problems, fixing them safely, and documenting only what is necessary.
 
-## Objetivo principal
-Criar e manter um sistema web local que permita:
+Prioritize:
+- reliability over speed
+- evidence over assumption
+- minimal changes over broad refactors
+- reversible fixes over invasive rewrites
 
-1. cadastrar APRs manualmente ao longo do mês
-2. importar APRs vindas de arquivos CSV ou XML exportados do sistema principal
-3. comparar os registros manuais com os importados
-4. identificar divergências
-5. exibir dashboard com indicadores
-6. registrar histórico de importações e comparações
-7. impedir duplicidade de IDs
-
----
-
-## Regra de negócio mais importante
-A comparação deve ser feita **sempre e exclusivamente pelo ID da APR**.
-
-### Regras obrigatórias
-- O campo `apr_id` é a única chave de comparação.
-- Outros campos podem existir apenas para exibição, auditoria, contexto e relatórios.
-- Nenhum outro campo pode alterar o resultado da comparação.
-- Não permitir duplicidade de `apr_id` no cadastro manual.
-- Detectar duplicidade de `apr_id` dentro de arquivos importados.
-- Duplicidades no importado devem ser tratadas como alerta ou erro.
-- O sistema deve persistir histórico de importações e execuções de comparação.
+Your success criteria:
+1. detect the real stack and available tooling
+2. identify only evidence-backed issues
+3. fix only what is necessary
+4. prove that the fix works
+5. leave a clear audit trail
 
 ---
 
-## Stack padrão do projeto
-Use esta stack por padrão, salvo justificativa técnica muito forte:
+## Non-Negotiable Rules
 
-- **Backend:** Python 3.12+
-- **Framework backend:** FastAPI
-- **Templates frontend:** Jinja2
-- **Estilo:** CSS simples ou Bootstrap leve
-- **Banco de dados:** SQLite
-- **ORM / acesso a dados:** SQLAlchemy
-- **Servidor local:** Uvicorn
-- **Deploy Debian:** systemd
+### Do not assume
+- Never assume the stack; detect it first.
+- Never assume tools are installed; verify before using them.
+- Never assume a warning is a bug.
+- Never assume a scanner finding is exploitable without contextual validation.
+- Never assume a fix is safe before understanding the impact.
 
-### Motivo da escolha
-Essa stack é simples, robusta, leve, fácil de manter e adequada para ambiente local em Debian, sem complexidade desnecessária.
+### Do not invent
+- Never invent results.
+- Never fabricate build output, test failures, stack traces, or security impact.
+- Every conclusion must be supported by real evidence.
 
----
+### Do not over-fix
+- Never mix bugfixes with opportunistic refactors.
+- Never rewrite working code without a clear need tied to the issue.
+- Never make cosmetic-only changes during bugfix work unless strictly necessary for the fix.
 
-## Escopo funcional obrigatório
-
-### 1. Dashboard
-O sistema deve ter uma tela inicial com indicadores como:
-- total de APRs manuais
-- total de APRs importadas
-- total de IDs conciliados
-- total faltando no manual
-- total faltando no importado
-- total de duplicidades
-- quantidade de importações realizadas
-- resumo da última comparação
-
-### 2. Cadastro manual de APR
-Deve existir:
-- formulário de cadastro manual
-- listagem de APRs manuais
-- busca por ID
-- edição básica
-- exclusão opcional, se implementada de forma segura
-
-Campos mínimos:
-- `apr_id` obrigatório e único
-- `data_referencia`
-- `responsavel`
-- `descricao`
-- `observacao`
-- `status`
-
-### 3. Importação de arquivos
-Deve permitir:
-- upload de CSV
-- upload de XML
-- leitura tolerante a colunas extras
-- validação do ID
-- detecção de registros inválidos
-- detecção de duplicidade dentro do arquivo
-- registro de lote de importação
-
-### 4. Comparação / conciliação
-Deve gerar pelo menos:
-- conciliados
-- faltando no manual
-- faltando no importado
-- duplicados
-- inválidos
-
-A comparação sempre deve ocorrer por lote, período ou competência.
-
-### 5. Divergências
-Deve existir tela para:
-- visualizar divergências
-- filtrar por categoria
-- buscar por ID
-- visualizar detalhe do problema
-- exportar CSV, se possível no MVP
-
-### 6. Histórico
-Registrar:
-- importações realizadas
-- execuções de comparação
-- data/hora
-- quantidade de registros
-- resumo consolidado
+### Do not take unsafe actions
+- Do not run destructive commands unless clearly necessary and justified.
+- Do not delete data, alter production credentials, or modify secrets.
+- Do not run destructive migrations automatically.
+- Do not change authentication, authorization, billing, persistence schema, or critical business rules without strong evidence and explicit necessity.
 
 ---
 
-## Requisitos de modelagem de banco
+## Operational Priorities
 
-A base deve incluir, no mínimo, estas tabelas ou equivalentes:
+When multiple issues exist, prioritize in this order:
 
-### `manual_aprs`
-Campos mínimos:
-- `id`
-- `apr_id` UNIQUE NOT NULL
-- `data_referencia`
-- `responsavel`
-- `descricao`
-- `observacao`
-- `status`
-- `created_at`
-- `updated_at`
-
-### `import_batches`
-Campos mínimos:
-- `id`
-- `nome_arquivo`
-- `tipo_arquivo`
-- `competencia`
-- `total_registros`
-- `total_validos`
-- `total_invalidos`
-- `total_duplicados`
-- `created_at`
-
-### `imported_aprs`
-Campos mínimos:
-- `id`
-- `batch_id`
-- `apr_id`
-- `payload_json` ou campos equivalentes
-- `is_valid`
-- `error_message`
-- `created_at`
-
-### `comparison_runs`
-Campos mínimos:
-- `id`
-- `batch_id`
-- `competencia`
-- `total_manual`
-- `total_importado`
-- `total_conciliado`
-- `total_faltando_manual`
-- `total_faltando_importado`
-- `total_duplicados`
-- `created_at`
-
-### `comparison_items`
-Campos mínimos:
-- `id`
-- `comparison_run_id`
-- `apr_id`
-- `origem`
-- `status_comparacao`
-- `detalhe`
-- `created_at`
-
-### Restrições obrigatórias
-- `manual_aprs.apr_id` deve ser único
-- criar índices para `apr_id`
-- manter relacionamento coerente entre lote, importação e comparação
-- impedir inconsistências básicas via constraints e validações de aplicação
+1. Failures that break execution, build, startup, deploy, or critical flows
+2. Confirmed vulnerabilities exploitable in the real context
+3. Reproducible functional bugs
+4. Configuration errors with verified impact
+5. Risks with plausible technical impact but incomplete evidence
+6. Code quality issues
+7. Non-urgent improvements
 
 ---
 
-## Regras de implementação
+## Issue Classification
 
-### Sempre faça
-- gerar código real e funcional
-- manter o projeto simples e organizado
-- validar entradas
-- tratar erros básicos
-- garantir consistência entre rotas, models, services e templates
-- documentar como rodar localmente
-- incluir `requirements.txt`
-- incluir `README.md`
-- incluir exemplo de service `systemd`
-- incluir inicialização de banco
-- incluir estrutura pronta para evolução futura
+Every finding must be classified as exactly one of:
 
-### Nunca faça
-- não comparar por nome, data, descrição ou outros campos
-- não usar microserviços
-- não usar dependências pesadas sem necessidade
-- não deixar persistência em memória
-- não gerar pseudocódigo no lugar de implementação
-- não criar abstrações exageradas
-- não ignorar duplicidade
-- não deixar a lógica central ambígua
+| Category | When to use |
+|---|---|
+| `bug_reproduzivel` | Confirmed failure with objective evidence |
+| `vulnerabilidade_confirmada` | Security issue exploitable in the actual context |
+| `risco_potencial` | Suspicious code or behavior without sufficient proof of real impact |
+| `erro_de_configuracao` | Incorrect configuration with verifiable effect |
+| `problema_de_qualidade` | Code works but is fragile, confusing, or hard to maintain |
+| `melhoria` | Suggestion without urgency |
+
+Important:
+- lint noise alone is not a bug
+- missing tests alone is not a bug
+- suspicious code alone is not a bug
+- scanner output alone is not a confirmed vulnerability
 
 ---
 
-## Estrutura esperada do projeto
+## Required Workflow
+
+## Phase 1 — Reconnaissance
+Before attempting any fix, identify:
+
+- primary language(s)
+- framework(s)
+- package manager(s)
+- test runner(s)
+- project structure
+- entrypoints
+- build/test/lint/typecheck commands
+- available tools in the environment
+- apparently high-risk areas
+
+High-risk areas usually include:
+- authentication and authorization
+- input validation
+- file upload / parsing
+- database writes and migrations
+- external integrations
+- background jobs / queues
+- configuration loading
+- environment variables
+- realtime or concurrency-sensitive flows
 
-A estrutura deve seguir algo próximo disso:
+Write the result to:
+- `.bug-report/01-reconhecimento.md`
 
-```text
-apr-conciliador/
-├─ app/
-│  ├─ main.py
-│  ├─ config.py
-│  ├─ db.py
-│  ├─ models/
-│  ├─ schemas/
-│  ├─ routers/
-│  ├─ services/
-│  ├─ templates/
-│  ├─ static/
-│  └─ utils/
-├─ data/
-│  └─ app.db
-├─ scripts/
-│  └─ init_db.py
-├─ docs/
-├─ requirements.txt
-├─ README.md
-├─ AGENTS.md
-└─ apr-conciliador.service
+### Minimum content
+- detected stack
+- relevant commands discovered
+- tools verified as available
+- main folders and entrypoints
+- initial risk map
+- limitations found in the environment
 
-Pode adaptar levemente, mas sem perder clareza.
+---
 
-Organização recomendada de responsabilidades
-routers/
+## Phase 2 — Discovery
+Collect only real evidence using tools compatible with the detected stack.
 
-Responsável por:
+Valid evidence sources:
+- failing build
+- failing typecheck
+- relevant lint failure with actual functional or safety implication
+- failing test
+- reproducible exception or stack trace
+- demonstrable logic inconsistency
+- security scanner finding with plausible contextual validation
+- broken runtime behavior confirmed by execution or flow inspection
 
-rotas web
+For every finding, record:
+- what was executed or inspected
+- what happened
+- why that supports the finding
+- affected files/modules
+- confidence level
 
-recebimento de formulários
+Write the result to:
+- `.bug-report/02-achados.md`
 
-upload de arquivos
+### Evidence format
+Each finding must include:
+- command or inspection method
+- observed output or behavior
+- impact summary
+- why this is evidence
+- whether reproduction was successful
 
-renderização de templates
+---
 
-endpoints auxiliares
+## Phase 3 — Triage and Prioritization
+For each relevant finding, create a structured entry in:
+- `.bug-report/03-priorizacao.md`
 
-services/
+Use this format:
 
-Responsável por:
+```json
+{
+  "id": "BUG-001",
+  "tipo": "bug_reproduzivel",
+  "severidade": "alta",
+  "confianca": "alta",
+  "arquivo": "caminho/relativo.ext",
+  "sintoma": "O que acontece",
+  "causa_raiz": "Explicação objetiva e verificável",
+  "evidencia": ["comando X falhou", "teste Y falhou", "stack trace Z"],
+  "correcao_recomendada": "menor correção viável",
+  "corrigir_agora": true
+}
+Severity guidance
 
-parsing de CSV
+critica: data loss, auth bypass, remote exploit, total failure of critical flow
 
-parsing de XML
+alta: important feature broken, strong security issue, high operational risk
 
-validação de IDs
+media: relevant bug with workaround or limited blast radius
 
-detecção de duplicados
+baixa: localized issue, limited impact
 
-execução da conciliação
+informativa: no immediate action required
 
-geração de resumos
+Confidence guidance
 
-models/
+alta: directly reproduced or strongly evidenced
 
-Responsável por:
+media: evidence is solid but incomplete
 
-entidades do banco
+baixa: plausible but not proven
 
-constraints
+Phase 4 — Fix
 
-relacionamentos
+Only fix items that are:
 
-templates/
+high enough confidence
 
-Responsável por:
+low or controlled regression risk
 
-dashboard
+technically understood
 
-cadastro manual
+not blocked by product decisions
 
-listagem manual
+For each approved fix:
 
-importação
+add or adjust a focused test when viable
 
-divergências
+apply the smallest viable correction
 
-histórico
+keep the diff minimal
 
-Regras da importação
-CSV
+avoid unrelated edits
 
-aceitar cabeçalhos variados, desde que o ID possa ser identificado ou mapeado
+preserve existing behavior outside the bug scope
 
-tolerar colunas extras
+Do not:
 
-marcar registros sem ID como inválidos
+refactor while fixing
 
-detectar duplicidades dentro do mesmo arquivo
+rename broadly without direct need
 
-XML
+reformat entire files unless required
 
-fazer parser robusto
+touch unrelated modules
 
-identificar nós de registro de APR
+Keep each logical fix isolated.
+If the environment supports commits, use one commit per logical fix.
+If not, still keep changes grouped by issue.
 
-extrair o ID
+For each corrected issue, create:
 
-tolerar campos extras
+.bug-report/correcoes/BUG-XXX.md
 
-marcar registros sem ID como inválidos
+Required content per correction
 
-detectar duplicidades
+root cause
 
-ID
+files changed
 
-obrigatório
+exact fix applied
 
-remover espaços extras nas bordas
+regression risk considered
 
-padronizar leitura com segurança
+how to validate
 
-tratar vazio como inválido
+what was intentionally not changed
 
-registrar motivo do erro
+Phase 5 — Validation
 
-Regras da comparação
+Validate each fix using the maximum applicable set below:
 
-A conciliação deve ser implementada com base em conjuntos de IDs.
+focused test for the bug
 
-Conjuntos mínimos
+related module test suite
 
-IDs manuais válidos
+typecheck for the affected scope
 
-IDs importados válidos
+lint for the affected scope
 
-IDs importados duplicados
+local build
 
-IDs inválidos importados
+smoke test of the impacted flow
 
-Resultado esperado
+Prefer targeted validation before broad validation, but run broader checks when reasonable.
 
-conciliados = interseção entre manual e importado
+Record final status in:
 
-faltando_no_manual = IDs presentes no importado e ausentes no manual
+.bug-report/RELATORIO.md
 
-faltando_no_importado = IDs presentes no manual e ausentes no importado
+Required final report structure
 
-duplicados = IDs repetidos no importado e qualquer outra duplicidade detectada
+executive summary
 
-invalidos = registros sem ID ou com erro de leitura
+findings by category
 
-Regra crítica
+fixes applied
 
-Nenhum campo além de apr_id participa da lógica de conciliação.
+pending items and why they were not fixed
 
-Interface esperada
-Telas obrigatórias
+validation performed
 
-Dashboard
+known limitations of the analysis
 
-Cadastro manual de APR
+practical recommendations
 
-Listagem manual
+residual risks
 
-Importação de arquivo
+Stop / Escalation Rules
 
-Resultado de comparação
+Do not auto-fix when:
 
-Divergências
+confidence is low
 
-Histórico
+root cause is unclear
 
-UX desejada
+regression risk is high
 
-interface limpa
+change requires product/business decision
 
-navegação simples
+schema migration is needed
 
-feedback visual claro
+auth/authz behavior may change
 
-mensagens de sucesso e erro
+financial/billing behavior may change
 
-destaque para divergências
+the issue cannot be safely validated
 
-filtros básicos por categoria, competência e ID
+the required tooling is unavailable and evidence is insufficient
 
-Segurança e integridade
+In those cases:
 
-Como é um sistema local interno, use segurança proporcional, sem exagero, mas com boas práticas:
+document the issue
 
-validar inputs no backend
+explain the risk
 
-sanitizar dados renderizados
+recommend the smallest safe next step
 
-tratar upload com cuidado
+do not guess
 
-limitar extensões aceitas
+Minimal-Diff Rule
 
-registrar erros relevantes
+Every fix must aim for the smallest safe diff.
 
-evitar SQL inseguro
+Avoid:
 
-não confiar em dados do arquivo importado
+large refactors
 
-garantir unicidade de apr_id no manual com constraint real no banco
+stylistic cleanups
 
-Se autenticação for adicionada depois, preparar de forma evolutiva, mas o MVP pode ser sem login se isso simplificar o projeto.
+broad renaming
 
-Critérios de pronto
+file moves
 
-Considere a tarefa pronta somente se:
+architectural rewrites
 
-o sistema roda localmente no Debian
+dependency swaps without necessity
 
-o banco SQLite está funcional
+If a broader change seems necessary, document why the minimal change is insufficient before proceeding.
 
-o cadastro manual está funcional
+Tooling Rules
 
-a importação CSV/XML está funcional
+Prefer:
 
-a comparação por ID está funcional
+repository-native scripts and commands
 
-o dashboard está funcional
+already-installed local tooling
 
-a tela de divergências está funcional
+targeted execution over broad execution
 
-existe proteção contra duplicidade
+reproducible commands over manual interpretation
 
-existe histórico básico de importações e comparações
+Examples:
 
-o projeto tem instruções de instalação e execução
+prefer package scripts over custom guessed commands
 
-Forma de resposta esperada ao gerar o projeto
+prefer module-scoped validation before full-repo validation
 
-Sempre entregar nesta ordem:
+verify tool existence before using it
 
-arquitetura escolhida e justificativa curta
+If a tool is unavailable:
 
-estrutura de pastas
+record that explicitly
 
-código de cada arquivo principal com caminho do arquivo
+choose the next safest compatible method
 
-instruções para instalar no Debian
+do not pretend the tool ran
 
-instruções para rodar localmente
+Documentation Style
 
-exemplo de serviço systemd
+Be concise, technical, and evidence-based.
 
-melhorias futuras
+Always distinguish clearly between:
 
-Convenções de código
+confirmed issue
 
-usar nomes claros e consistentes
+likely risk
 
-evitar funções gigantes
+code quality concern
 
-separar parsing, comparação e persistência
+improvement suggestion
 
-manter baixa complexidade
+Do not present speculation as fact.
 
-comentar apenas quando agregar valor
+Golden Rule
 
-preferir código explícito ao “mágico”
+When there is a conflict between fixing faster and fixing safer, choose safer.
 
-garantir imports corretos
+When there is a conflict between appearing productive and being technically reliable, choose reliability.
 
-manter consistência entre nomes de tabelas, campos e rotas
-
-Instruções finais para o agente
-
-Ao trabalhar neste projeto:
-
-preserve a regra central de comparação por ID
-
-priorize simplicidade, robustez e manutenção
-
-não mude a stack sem necessidade real
-
-não crie complexidade desnecessária
-
-entregue sempre algo executável
-
-revise se há risco de duplicidade não tratada
-
-revise se algum trecho está comparando por algo além do ID
-
-revise se o sistema está coerente com ambiente local Debian
-
-Se houver dúvida entre duas abordagens, escolha a mais simples, mais estável e mais fácil de manter.
+Find real problems, fix only what is necessary, and prove the fix works.
