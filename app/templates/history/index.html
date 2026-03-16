@@ -4,7 +4,7 @@
 <section class="page-header">
     <div>
         <h1>Histórico</h1>
-        <p>Acompanhe lotes importados e execuções de comparação registradas no sistema.</p>
+        <p>Acompanhe importações e execuções de comparação mensal registradas no sistema.</p>
     </div>
 </section>
 
@@ -56,8 +56,6 @@
                 <thead>
                     <tr>
                         <th><a href="/history?import_page={{ import_pagination.page }}&comparison_page={{ comparison_pagination.page }}&audit_page={{ audit_pagination.page }}&import_sort={{ import_sort }}&import_direction={{ import_direction }}&comparison_sort=id&comparison_direction={% if comparison_sort == 'id' and comparison_direction == 'asc' %}desc{% else %}asc{% endif %}">ID</a></th>
-                        <th><a href="/history?import_page={{ import_pagination.page }}&comparison_page={{ comparison_pagination.page }}&audit_page={{ audit_pagination.page }}&import_sort={{ import_sort }}&import_direction={{ import_direction }}&comparison_sort=scope_type&comparison_direction={% if comparison_sort == 'scope_type' and comparison_direction == 'asc' %}desc{% else %}asc{% endif %}">Escopo</a></th>
-                        <th><a href="/history?import_page={{ import_pagination.page }}&comparison_page={{ comparison_pagination.page }}&audit_page={{ audit_pagination.page }}&import_sort={{ import_sort }}&import_direction={{ import_direction }}&comparison_sort=batch_id&comparison_direction={% if comparison_sort == 'batch_id' and comparison_direction == 'asc' %}desc{% else %}asc{% endif %}">Lote</a></th>
                         <th><a href="/history?import_page={{ import_pagination.page }}&comparison_page={{ comparison_pagination.page }}&audit_page={{ audit_pagination.page }}&import_sort={{ import_sort }}&import_direction={{ import_direction }}&comparison_sort=competencia&comparison_direction={% if comparison_sort == 'competencia' and comparison_direction == 'asc' %}desc{% else %}asc{% endif %}">Competência</a></th>
                         <th>Resumo</th>
                     </tr>
@@ -66,13 +64,11 @@
                     {% for run in comparisons %}
                     <tr>
                         <td><a href="/comparisons/{{ run.id }}">#{{ run.id }}</a></td>
-                        <td>{{ run.scope_type }}</td>
-                        <td>#{{ run.batch_id }}</td>
                         <td>{{ run.competencia }}</td>
                         <td>{{ run.total_conciliado }} conciliados / {{ run.total_faltando_manual }} faltando no manual / {{ run.total_faltando_importado }} faltando no importado</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5" class="muted">Nenhuma comparação registrada.</td></tr>
+                    <tr><td colspan="3" class="muted">Nenhuma comparação registrada.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -13,7 +13,11 @@ def get_dashboard_summary(db: Session) -> dict[str, object]:
     total_duplicates = db.scalar(
         select(func.count()).select_from(ImportedAPR).where(ImportedAPR.is_duplicate.is_(True))
     ) or 0
-    latest_run = db.scalar(select(ComparisonRun).order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc()))
+    latest_run = db.scalar(
+        select(ComparisonRun)
+        .where(ComparisonRun.scope_type == "competencia")
+        .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
+    )
 
     return {
         "total_manual": total_manual,

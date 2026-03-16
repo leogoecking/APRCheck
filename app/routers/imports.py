@@ -29,19 +29,15 @@ def imports_page(
     db: Session = Depends(get_db),
 ) -> object:
     selected_batch = None
-    selected_batch_latest_batch_run = None
     selected_batch_latest_competencia_run = None
     selected_batch_preview_by_row_id: dict[int, dict[str, str]] = {}
     if batch_id is not None:
         selected_batch = db.scalar(
             select(ImportBatch)
             .options(selectinload(ImportBatch.imported_aprs), selectinload(ImportBatch.comparison_runs))
-            .where(ImportBatch.id == batch_id)
+            .where(ImportBatch.id == batch_id, ImportBatch.deleted_at.is_(None))
         )
         if selected_batch is not None:
-            batch_runs = [run for run in selected_batch.comparison_runs if run.scope_type == "batch"]
-            if batch_runs:
-                selected_batch_latest_batch_run = batch_runs[0]
             selected_batch_latest_competencia_run = db.scalar(
                 select(ComparisonRun)
                 .where(
@@ -53,12 +49,17 @@ def imports_page(
             selected_batch_preview_by_row_id = {
                 row.id: extract_visual_fields(row.payload_json) for row in selected_batch.imported_aprs
             }
-    batches = list(db.scalars(select(ImportBatch).order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())))
+    batches = list(
+        db.scalars(
+            select(ImportBatch)
+            .where(ImportBatch.deleted_at.is_(None))
+            .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+        )
+    )
     context = {
         "request": request,
         "batches": batches,
         "selected_batch": selected_batch,
-        "selected_batch_latest_batch_run": selected_batch_latest_batch_run,
         "selected_batch_latest_competencia_run": selected_batch_latest_competencia_run,
         "selected_batch_preview_by_row_id": selected_batch_preview_by_row_id,
         "form_errors": [],
@@ -79,12 +80,17 @@ def import_file(
         batch = create_import_batch(db, arquivo, payload)
     except (ValidationError, ImportValidationError, ValueError) as exc:
         errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
-        batches = list(db.scalars(select(ImportBatch).order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())))
+        batches = list(
+            db.scalars(
+                select(ImportBatch)
+                .where(ImportBatch.deleted_at.is_(None))
+                .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+            )
+        )
         context = {
             "request": request,
             "batches": batches,
             "selected_batch": None,
-            "selected_batch_latest_batch_run": None,
             "selected_batch_latest_competencia_run": None,
             "selected_batch_preview_by_row_id": {},
             "form_errors": errors,

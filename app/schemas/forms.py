@@ -4,7 +4,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.services.apr_utils import normalize_apr_id
+from app.services.apr_utils import normalize_apr_id, normalize_competencia
 
 
 class ManualAPRInput(BaseModel):
@@ -30,16 +30,24 @@ class ImportBatchInput(BaseModel):
     @field_validator("competencia")
     @classmethod
     def validate_competencia(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("Informe a competência do lote.")
-        return cleaned
+        normalized = normalize_competencia(value)
+        if not normalized:
+            raise ValueError("Informe a competência no formato YYYY-MM.")
+        return normalized
 
 
 class DivergenceFilters(BaseModel):
     competencia: str | None = None
     categoria: str | None = None
     apr_id: str | None = None
+
+    @field_validator("competencia")
+    @classmethod
+    def normalize_optional_competencia(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_competencia(value)
+        return normalized or None
 
     @field_validator("apr_id")
     @classmethod

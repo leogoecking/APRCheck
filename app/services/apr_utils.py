@@ -60,6 +60,40 @@ def normalize_apr_id(value: object) -> str | None:
     return cleaned or None
 
 
+def normalize_competencia(value: object) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = str(value).strip()
+    if not cleaned:
+        return None
+
+    for pattern in (r"^(?P<year>\d{4})[-/](?P<month>\d{1,2})$", r"^(?P<month>\d{1,2})[-/](?P<year>\d{4})$"):
+        match = re.fullmatch(pattern, cleaned)
+        if not match:
+            continue
+
+        year = int(match.group("year"))
+        month = int(match.group("month"))
+        if 1 <= month <= 12:
+            return f"{year:04d}-{month:02d}"
+    return None
+
+
+def competencia_variants(value: str) -> tuple[str, ...]:
+    normalized = normalize_competencia(value)
+    if normalized is None:
+        return ()
+
+    year, month = normalized.split("-", maxsplit=1)
+    return (
+        normalized,
+        f"{year}/{month}",
+        f"{month}/{year}",
+        f"{month}-{year}",
+    )
+
+
 def normalize_header(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.strip().lower())
 

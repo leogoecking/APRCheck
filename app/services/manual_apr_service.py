@@ -4,7 +4,7 @@ import csv
 import io
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -35,6 +35,26 @@ class ManualImportResult:
     skipped_count: int
     errors: list[str]
     competencias_afetadas: set[str]
+
+
+def classify_manual_reference_month(
+    data_referencia: date | None,
+    *,
+    today: date | None = None,
+) -> str:
+    if data_referencia is None:
+        return "sem_data"
+
+    reference_today = today or date.today()
+    current_month = reference_today.replace(day=1)
+    previous_month = (current_month - timedelta(days=1)).replace(day=1)
+    apr_month = data_referencia.replace(day=1)
+
+    if apr_month == current_month:
+        return "mes_atual"
+    if apr_month == previous_month:
+        return "mes_anterior"
+    return "outro_mes"
 
 
 def list_manual_aprs(
@@ -178,11 +198,9 @@ def export_manual_aprs_csv_rows(items: list[ManualAPR]) -> list[list[str]]:
     rows = [
         [
             "apr_id",
-            "data_referencia",
+            "data_abertura",
             "assunto",
-            "responsavel",
-            "status",
-            "observacao",
+            "colaborador",
             "created_at",
             "updated_at",
         ]
@@ -194,8 +212,6 @@ def export_manual_aprs_csv_rows(items: list[ManualAPR]) -> list[list[str]]:
                 item.data_referencia.isoformat() if item.data_referencia else "",
                 item.descricao or "",
                 item.responsavel or "",
-                item.status or "",
-                item.observacao or "",
                 item.created_at.isoformat(sep=" ", timespec="seconds"),
                 item.updated_at.isoformat(sep=" ", timespec="seconds"),
             ]
@@ -333,8 +349,8 @@ def _build_manual_order(sort_by: str, direction: str) -> tuple[object, ...]:
     sort_map = {
         "apr_id": ManualAPR.apr_id,
         "data_referencia": ManualAPR.data_referencia,
+        "descricao": ManualAPR.descricao,
         "responsavel": ManualAPR.responsavel,
-        "status": ManualAPR.status,
         "updated_at": ManualAPR.updated_at,
     }
     column = sort_map.get(sort_by, ManualAPR.updated_at)

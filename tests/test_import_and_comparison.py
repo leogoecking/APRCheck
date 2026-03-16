@@ -14,7 +14,10 @@ from app.services.comparison_service import (
     run_competencia_comparison,
 )
 from app.services.import_service import create_import_batch, parse_csv_bytes, parse_xml_bytes
-from app.services.manual_apr_service import create_manual_apr, import_manual_aprs_from_text
+from app.services.manual_apr_service import (
+    classify_manual_reference_month,
+    create_manual_apr,
+)
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -128,23 +131,11 @@ def test_real_mes03_sample_generates_visual_preview_map(app_module):
         db.close()
 
 
-def test_manual_bulk_import_accepts_structured_text_and_maps_visual_fields(app_module):
-    db = app_module.db_module.SessionLocal()
-    try:
-        result = import_manual_aprs_from_text(
-            db,
-            "apr_id;data_abertura;assunto;responsavel;status\n"
-            "APR-700;11/03/2026 13:10;MANUTENCAO;HARISSON;aberto\n",
-        )
-
-        assert result.created_count == 1
-        manual = db.query(ManualAPR).filter_by(apr_id="APR-700").one()
-        audit = db.query(ManualAPRAuditLog).filter_by(action="bulk_import").one()
-        assert manual.descricao == "MANUTENCAO"
-        assert str(manual.data_referencia) == "2026-03-11"
-        assert "criadas=1" in (audit.detalhe or "")
-    finally:
-        db.close()
+def test_classify_manual_reference_month_detects_current_previous_and_other():
+    assert classify_manual_reference_month(date(2026, 3, 10), today=date(2026, 3, 16)) == "mes_atual"
+    assert classify_manual_reference_month(date(2026, 2, 10), today=date(2026, 3, 16)) == "mes_anterior"
+    assert classify_manual_reference_month(date(2026, 1, 10), today=date(2026, 3, 16)) == "outro_mes"
+    assert classify_manual_reference_month(None, today=date(2026, 3, 16)) == "sem_data"
 
 
 def test_parse_xml_detects_missing_id_and_duplicate():
@@ -390,6 +381,46 @@ def test_competencia_comparison_combines_batches_and_detects_cross_batch_duplica
         assert result.total_faltando_manual == 1
         assert result.total_faltando_importado == 1
         assert result.total_duplicados == 1
+    finally:
+        db.close()
+
+
+def test_import_batch_input_normalizes_competencia_variants():
+    payload = ImportBatchInput(competencia="03/2026")
+
+    assert payload.competencia == "2026-03"
+
+
+def test_competencia_comparison_accepts_legacy_month_format(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_manual_apr(
+            db,
+            ManualAPRInput(
+                apr_id="APR-900",
+                data_referencia=date(2026, 3, 10),
+            ),
+        )
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote.csv",
+                    "file": type("FileStub", (), {"read": lambda self: b"apr_id\nAPR-900\n"})(),
+                },
+            )(),
+            ImportBatchInput(competencia="03/2026"),
+        )
+
+        result = run_competencia_comparison(db, "03/2026")
+
+        assert result is not None
+        assert result.competencia == "2026-03"
+        assert result.total_manual == 1
+        assert result.total_conciliado == 1
+        assert result.total_faltando_manual == 0
     finally:
         db.close()
 

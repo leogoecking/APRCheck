@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
@@ -70,12 +71,17 @@ def create_import_batch(db: Session, upload: UploadFile, payload: ImportBatchInp
     return batch
 
 
-def get_import_batch(db: Session, batch_id: int) -> ImportBatch | None:
-    return db.get(ImportBatch, batch_id)
+def get_import_batch(db: Session, batch_id: int, *, include_deleted: bool = False) -> ImportBatch | None:
+    batch = db.get(ImportBatch, batch_id)
+    if batch is None:
+        return None
+    if batch.deleted_at is not None and not include_deleted:
+        return None
+    return batch
 
 
 def delete_import_batch(db: Session, batch: ImportBatch) -> None:
-    db.delete(batch)
+    batch.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
 
 

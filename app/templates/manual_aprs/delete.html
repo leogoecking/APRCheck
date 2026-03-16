@@ -16,11 +16,12 @@
         {% endfor %}
     </div>
     {% endif %}
-    <p><strong>APR ID:</strong> {{ manual_apr.apr_id }}</p>
-    <p><strong>Data:</strong> {{ manual_apr.data_referencia or '-' }}</p>
+    <p><strong>ID:</strong> {{ manual_apr.apr_id }}</p>
+    <p><strong>Data de Abertura:</strong> {{ manual_apr.data_referencia or '-' }}</p>
     <p><strong>Assunto:</strong> {{ manual_apr.descricao or '-' }}</p>
+    <p><strong>Colaborador:</strong> {{ manual_apr.responsavel or '-' }}</p>
     <form method="post" action="/manual-aprs/{{ manual_apr.id }}/delete" class="form-grid">
-        <label class="full-width">Digite o APR ID para confirmar
+        <label class="full-width">Digite o ID para confirmar
             <input type="text" name="confirm_apr_id" placeholder="{{ manual_apr.apr_id }}" required>
         </label>
         <div class="actions full-width">

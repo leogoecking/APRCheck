@@ -4,7 +4,7 @@
 <section class="page-header">
     <div>
         <h1>Dashboard</h1>
-        <p>Resumo operacional do cadastro manual, das importações e da última conciliação.</p>
+        <p>Resumo operacional do cadastro manual, das importações e da última conciliação mensal.</p>
     </div>
 </section>
 
@@ -19,14 +19,13 @@
 </section>
 
 <section class="card">
-    <h2>Última comparação</h2>
+    <h2>Última comparação mensal</h2>
     {% if summary.latest_run %}
     <div class="metrics-row">
-        <div><span class="label">Escopo</span><strong>{{ summary.latest_run.scope_type }}</strong></div>
         <div><span class="label">Competência</span><strong>{{ summary.latest_run.competencia }}</strong></div>
-        <div><span class="label">Lote</span><strong>#{{ summary.latest_run.batch_id }}</strong></div>
         <div><span class="label">Conciliado</span><strong>{{ summary.latest_run.total_conciliado }}</strong></div>
         <div><span class="label">Inválidos</span><strong>{{ summary.latest_run.total_invalidos }}</strong></div>
+        <div><span class="label">Importações consideradas</span><strong>{{ summary.latest_run.source_batch_ids.count(',') + 1 if summary.latest_run.source_batch_ids else 0 }}</strong></div>
     </div>
     <p class="muted">Faltando no manual: {{ summary.latest_run.total_faltando_manual }} | Faltando no importado: {{ summary.latest_run.total_faltando_importado }} | Duplicados: {{ summary.latest_run.total_duplicados }}</p>
     <a class="button" href="/comparisons/{{ summary.latest_run.id }}">Abrir resultado</a>

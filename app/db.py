@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import DATA_DIR, settings
+from app.services.apr_utils import normalize_competencia
 
 
 class Base(DeclarativeBase):
@@ -81,6 +82,52 @@ def _apply_sqlite_compat_migrations() -> None:
                 "ON comparison_runs (scope_type, scope_value, created_at)"
             )
         )
+
+        batch_columns = {column["name"] for column in inspector.get_columns("import_batches")}
+        if "deleted_at" not in batch_columns:
+            connection.execute(
+                text("ALTER TABLE import_batches ADD COLUMN deleted_at DATETIME")
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_import_batches_deleted_at "
+                    "ON import_batches (deleted_at)"
+                )
+            )
+
+        _normalize_competencia_columns(connection, inspector)
+
+
+def _normalize_competencia_columns(connection, inspector) -> None:
+    if "import_batches" in inspector.get_table_names():
+        rows = connection.execute(text("SELECT id, competencia FROM import_batches")).mappings().all()
+        for row in rows:
+            normalized = normalize_competencia(row["competencia"])
+            if normalized and normalized != row["competencia"]:
+                connection.execute(
+                    text("UPDATE import_batches SET competencia = :competencia WHERE id = :id"),
+                    {"competencia": normalized, "id": row["id"]},
+                )
+
+    if "comparison_runs" in inspector.get_table_names():
+        rows = connection.execute(
+            text("SELECT id, competencia, scope_type, scope_value FROM comparison_runs")
+        ).mappings().all()
+        for row in rows:
+            normalized = normalize_competencia(row["competencia"])
+            if normalized and normalized != row["competencia"]:
+                connection.execute(
+                    text("UPDATE comparison_runs SET competencia = :competencia WHERE id = :id"),
+                    {"competencia": normalized, "id": row["id"]},
+                )
+
+            if row["scope_type"] == "competencia":
+                normalized_scope = normalize_competencia(row["scope_value"])
+                if normalized_scope and normalized_scope != row["scope_value"]:
+                    connection.execute(
+                        text("UPDATE comparison_runs SET scope_value = :scope_value WHERE id = :id"),
+                        {"scope_value": normalized_scope, "id": row["id"]},
+                    )
 
 
 def get_db() -> Generator[Session, None, None]:

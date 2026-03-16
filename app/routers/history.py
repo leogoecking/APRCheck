@@ -39,7 +39,7 @@ def history_page(
     comparison_sort, comparison_direction = _history_sort_state(
         comparison_sort,
         comparison_direction,
-        {"id", "batch_id", "competencia", "scope_type", "created_at"},
+        {"id", "competencia", "created_at"},
         "created_at",
     )
     import_order_map = {
@@ -50,9 +50,7 @@ def history_page(
     }
     comparison_order_map = {
         "id": ComparisonRun.id,
-        "batch_id": ComparisonRun.batch_id,
         "competencia": ComparisonRun.competencia,
-        "scope_type": ComparisonRun.scope_type,
         "created_at": ComparisonRun.created_at,
     }
     batches = list(
@@ -69,6 +67,7 @@ def history_page(
         db.scalars(
             select(ComparisonRun)
             .options(selectinload(ComparisonRun.batch))
+            .where(ComparisonRun.scope_type == "competencia")
             .order_by(
                 comparison_order_map[comparison_sort].asc()
                 if comparison_direction == "asc"

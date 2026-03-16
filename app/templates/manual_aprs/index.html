@@ -4,7 +4,7 @@
 <section class="page-header">
     <div>
         <h1>Cadastro manual de APR</h1>
-        <p>O cadastro manual impede duplicidade de ID e mantém a base usada na conciliação.</p>
+        <p>O cadastro manual opera individualmente com ID, Data de Abertura, Assunto e Colaborador.</p>
     </div>
 </section>
 
@@ -13,7 +13,7 @@
         <div class="section-header">
             <div>
                 <h2>Nova APR manual</h2>
-                <p class="muted">Cadastro individual com validação de ID único e campos visuais de apoio.</p>
+                <p class="muted">Cadastro individual com os quatro campos operacionais da base manual.</p>
             </div>
         </div>
         {% if form_errors %}
@@ -24,23 +24,18 @@
         </div>
         {% endif %}
         <form method="post" action="/manual-aprs" class="form-grid">
-            <label>APR ID
+            <label>ID
                 <input type="text" name="apr_id" value="{{ form_data.get('apr_id', '') }}" required>
             </label>
-            <label>Data de referência
+            <label>Data de Abertura
                 <input type="date" name="data_referencia" value="{{ form_data.get('data_referencia', '') }}">
+                <small class="small-text muted">O sistema identifica automaticamente se a APR pertence ao mês atual ou ao mês anterior.</small>
             </label>
-            <label>Responsável
+            <label>Colaborador
                 <input type="text" name="responsavel" value="{{ form_data.get('responsavel', '') }}">
             </label>
-            <label>Status
-                <input type="text" name="status" value="{{ form_data.get('status', '') }}">
-            </label>
-            <label class="full-width">Descrição
+            <label class="full-width">Assunto
                 <textarea name="descricao" rows="3">{{ form_data.get('descricao', '') }}</textarea>
-            </label>
-            <label class="full-width">Observação
-                <textarea name="observacao" rows="3">{{ form_data.get('observacao', '') }}</textarea>
             </label>
             <div class="actions full-width">
                 <button class="button" type="submit">Salvar APR</button>
@@ -51,40 +46,16 @@
     <section class="card">
         <div class="section-header">
             <div>
-                <h2>Importação manual em lote</h2>
-                <p class="muted">Use texto colado ou arquivo da base manual para acelerar o cadastro.</p>
+                <h2>Importar arquivo da base manual</h2>
+                <p class="muted">Aceita <code>CSV</code>, <code>TSV</code> ou <code>TXT</code> com colunas da base manual.</p>
             </div>
-        </div>
-        {% if import_errors %}
-        <div class="alert alert-error">
-            {% for error in import_errors %}
-            <div>{{ error }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        <div class="subsection-block">
-            <h3>Colar linhas</h3>
-            <p class="small-text muted">Cole um APR ID por linha ou use cabeçalhos como <code>apr_id;data_abertura;assunto;responsavel;status</code>.</p>
-        </div>
-        <form method="post" action="/manual-aprs/import" class="form-grid">
-            <label class="full-width">Linhas para importação
-                <textarea name="import_text" rows="10" placeholder="APR-100&#10;APR-101&#10;&#10;ou&#10;apr_id;data_abertura;assunto&#10;APR-200;11/03/2026 13:10;MANUTENCAO" required>{{ import_form_data }}</textarea>
-            </label>
-            <div class="actions full-width">
-                <button class="button" type="submit">Importar em lote</button>
-            </div>
-        </form>
-        <div class="subsection-divider"></div>
-        <div class="subsection-block">
-            <h3>Importar arquivo</h3>
-            <p class="small-text muted">Aceita <code>CSV</code>, <code>TSV</code> ou <code>TXT</code> com colunas da base manual.</p>
         </div>
         <form method="post" action="/manual-aprs/import-csv" enctype="multipart/form-data" class="form-grid">
-            <label class="full-width">Arquivo CSV da base manual
+            <label class="full-width">Arquivo CSV/TXT da base manual
                 <input type="file" name="arquivo" accept=".csv,.tsv,.txt,text/csv,text/plain" required>
             </label>
             <div class="actions full-width">
-                <button class="button button-secondary" type="submit">Importar CSV</button>
+                <button class="button button-secondary" type="submit">Importar arquivo</button>
             </div>
         </form>
     </section>
@@ -93,7 +64,7 @@
         <div class="section-header">
             <div>
                 <h2>Base manual de APRs</h2>
-                <p class="muted">Lista operacional com busca por ID, ordenação e exportação da base atual.</p>
+                <p class="muted">Lista operacional com foco nas comparações mensais.</p>
             </div>
         </div>
         <form method="get" action="/manual-aprs" class="inline-form inline-form-wide">
@@ -108,11 +79,11 @@
             <table>
                 <thead>
                     <tr>
-                        <th><a href="/manual-aprs?q={{ query }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">APR ID</a></th>
-                        <th><a href="/manual-aprs?q={{ query }}&sort=data_referencia&direction={% if sort == 'data_referencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Data</a></th>
-                        <th>Assunto</th>
-                        <th><a href="/manual-aprs?q={{ query }}&sort=responsavel&direction={% if sort == 'responsavel' and direction == 'asc' %}desc{% else %}asc{% endif %}">Responsável</a></th>
-                        <th><a href="/manual-aprs?q={{ query }}&sort=status&direction={% if sort == 'status' and direction == 'asc' %}desc{% else %}asc{% endif %}">Status</a></th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=apr_id&direction={% if sort == 'apr_id' and direction == 'asc' %}desc{% else %}asc{% endif %}">ID</a></th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=data_referencia&direction={% if sort == 'data_referencia' and direction == 'asc' %}desc{% else %}asc{% endif %}">Data de Abertura</a></th>
+                        <th>Reconhecimento</th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=descricao&direction={% if sort == 'descricao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Assunto</a></th>
+                        <th><a href="/manual-aprs?q={{ query }}&sort=responsavel&direction={% if sort == 'responsavel' and direction == 'asc' %}desc{% else %}asc{% endif %}">Colaborador</a></th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -121,9 +92,19 @@
                     <tr>
                         <td><strong>{{ item.apr_id }}</strong></td>
                         <td>{{ item.data_referencia or '-' }}</td>
+                        <td>
+                            {% if reference_labels.get(item.id) == 'mes_atual' %}
+                            Mês atual
+                            {% elif reference_labels.get(item.id) == 'mes_anterior' %}
+                            Mês anterior
+                            {% elif reference_labels.get(item.id) == 'sem_data' %}
+                            Sem data
+                            {% else %}
+                            Outro mês
+                            {% endif %}
+                        </td>
                         <td>{{ item.descricao or '-' }}</td>
                         <td>{{ item.responsavel or '-' }}</td>
-                        <td>{{ item.status or '-' }}</td>
                         <td class="actions">
                             <a href="/manual-aprs/{{ item.id }}/edit">Editar</a>
                             <a href="/manual-aprs/{{ item.id }}/delete">Excluir</a>

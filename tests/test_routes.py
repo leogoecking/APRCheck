@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from io import BytesIO
 
 from openpyxl import load_workbook
 from starlette.datastructures import UploadFile
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 
-from app.models.entities import ComparisonRun, ManualAPRAuditLog
+from app.models.entities import ComparisonRun, ManualAPR, ManualAPRAuditLog
 from app.services.comparison_service import list_divergence_items
 from app.routers.comparisons import (
     comparison_detail,
@@ -21,16 +23,17 @@ from app.routers.divergences import (
     export_divergences_xlsx,
 )
 from app.routers.history import history_page
-from app.routers.imports import import_batch_delete, import_batch_delete_confirm, import_file
+from app.routers.imports import import_batch_delete, import_batch_delete_confirm, import_file, imports_page
 from app.routers.manual_aprs import (
     manual_apr_create,
     manual_apr_delete,
     manual_apr_delete_confirm,
+    manual_apr_edit,
     manual_apr_export_csv,
-    manual_apr_import,
     manual_apr_import_csv,
     manual_apr_list,
 )
+from app.services.manual_apr_service import export_manual_aprs_csv_rows
 
 
 def make_request(app, method: str = "GET", path: str = "/") -> Request:
@@ -83,19 +86,35 @@ def test_manual_apr_create_and_duplicate(app_module):
         db.close()
 
 
-def test_manual_apr_bulk_import_and_list_sorting(app_module):
+def test_manual_apr_list_shows_month_recognition(app_module):
     db = app_module.db_module.SessionLocal()
     try:
-        response = manual_apr_import(
-            make_request(app_module.app, method="POST", path="/manual-aprs/import"),
-            import_text=(
-                "apr_id;data_abertura;assunto;responsavel;status\n"
-                "APR-30;11/03/2026 13:10;MANUTENCAO A;Maria;ativo\n"
-                "APR-20;10/03/2026 09:00;MANUTENCAO B;Joao;ativo\n"
-            ),
+        today = date.today()
+        current_month_date = today.replace(day=min(today.day, 15))
+        previous_month_date = (today.replace(day=1) - timedelta(days=1)).replace(day=10)
+
+        first_response = manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-30",
+            data_referencia=current_month_date.isoformat(),
+            responsavel="Maria",
+            descricao="MANUTENCAO A",
+            observacao=None,
+            status_apr="ativo",
             db=db,
         )
-        assert response.status_code == 303
+        second_response = manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-20",
+            data_referencia=previous_month_date.isoformat(),
+            responsavel="Joao",
+            descricao="MANUTENCAO B",
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+        assert first_response.status_code == 303
+        assert second_response.status_code == 303
 
         page = manual_apr_list(
             make_request(app_module.app, path="/manual-aprs"),
@@ -107,7 +126,9 @@ def test_manual_apr_bulk_import_and_list_sorting(app_module):
         )
         body = page.body.decode()
         assert page.status_code == 200
-        assert "Importação manual em lote" in body
+        assert "Mês atual" in body
+        assert "Mês anterior" in body
+        assert "Colaborador" in body
         assert "MANUTENCAO A" in body
         assert "MANUTENCAO B" in body
         assert body.index("APR-20") < body.index("APR-30")
@@ -123,7 +144,7 @@ def test_manual_apr_csv_import_and_export(app_module):
             arquivo=UploadFile(
                 filename="base-manual.csv",
                 file=BytesIO(
-                    b"apr_id,data_abertura,assunto,responsavel,status\nAPR-40,2026-03-11,ASSUNTO CSV,Ana,ativo\n"
+                    b"apr_id,data_abertura,assunto,colaborador\nAPR-40,2026-03-11,ASSUNTO CSV,Ana\n"
                 ),
             ),
             db=db,
@@ -134,6 +155,15 @@ def test_manual_apr_csv_import_and_export(app_module):
         assert export_response.status_code == 200
         assert "text/csv" in export_response.headers["content-type"]
         assert "base_manual_aprs.csv" in export_response.headers["content-disposition"]
+        exported_rows = export_manual_aprs_csv_rows(db.query(ManualAPR).order_by(ManualAPR.apr_id.asc()).all())
+        assert exported_rows[0] == [
+            "apr_id",
+            "data_abertura",
+            "assunto",
+            "colaborador",
+            "created_at",
+            "updated_at",
+        ]
     finally:
         db.close()
 
@@ -163,9 +193,9 @@ def test_manual_apr_delete_requires_confirmation_and_reruns_comparison(app_modul
             db=db,
         )
         assert import_response.status_code == 303
-        execute_comparison(
-            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
-            batch_id=1,
+        execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
             db=db,
         )
 
@@ -175,7 +205,7 @@ def test_manual_apr_delete_requires_confirmation_and_reruns_comparison(app_modul
             db=db,
         )
         assert confirm_page.status_code == 200
-        assert "Digite o APR ID para confirmar" in confirm_page.body.decode()
+        assert "Digite o ID para confirmar" in confirm_page.body.decode()
 
         invalid_delete = manual_apr_delete(
             make_request(app_module.app, method="POST", path="/manual-aprs/1/delete"),
@@ -193,13 +223,56 @@ def test_manual_apr_delete_requires_confirmation_and_reruns_comparison(app_modul
         )
         assert valid_delete.status_code == 303
 
-        runs = list(db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).order_by(ComparisonRun.id.asc()))
+        runs = list(
+            db.query(ComparisonRun)
+            .filter(ComparisonRun.scope_type == "competencia", ComparisonRun.competencia == "2026-03")
+            .order_by(ComparisonRun.id.asc())
+        )
         delete_audit = db.query(ManualAPRAuditLog).filter_by(action="delete", apr_id="APR-55").one()
         assert len(runs) == 2
         assert runs[-1].total_manual == 0
         assert runs[-1].total_conciliado == 0
         assert runs[-1].total_faltando_manual == 1
         assert "apr_id=APR-55" in (delete_audit.detalhe or "")
+    finally:
+        db.close()
+
+
+def test_manual_apr_edit_keeps_hidden_legacy_fields(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_response = manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-EDIT-1",
+            data_referencia="2026-03-11",
+            responsavel="Maria",
+            descricao="ASSUNTO ANTIGO",
+            observacao="OBS LEGADA",
+            status_apr="ativo",
+            db=db,
+        )
+        assert create_response.status_code == 303
+
+        edit_response = manual_apr_edit(
+            make_request(app_module.app, method="POST", path="/manual-aprs/1/edit"),
+            manual_apr_id=1,
+            apr_id="APR-EDIT-1",
+            data_referencia="2026-03-12",
+            responsavel="Carlos",
+            descricao="ASSUNTO NOVO",
+            observacao=None,
+            status_apr=None,
+            db=db,
+        )
+        assert edit_response.status_code == 303
+
+        manual = db.query(ManualAPRAuditLog).filter_by(action="update", apr_id="APR-EDIT-1").one()
+        assert "colaborador=Carlos" in (manual.detalhe or "")
+        assert "assunto=ASSUNTO NOVO" in (manual.detalhe or "")
+
+        saved = db.query(ManualAPR).filter_by(apr_id="APR-EDIT-1").one()
+        assert saved.status == "ativo"
+        assert saved.observacao == "OBS LEGADA"
     finally:
         db.close()
 
@@ -472,10 +545,22 @@ def test_import_batch_delete_requires_confirmation_and_updates_remaining_compete
         )
         assert valid_delete.status_code == 303
 
-        remaining_batches = list(db.query(ComparisonRun).filter(ComparisonRun.batch_id == 2).order_by(ComparisonRun.id.asc()))
-        assert db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).count() == 0
+        remaining_batches = list(
+            db.query(ComparisonRun).filter(ComparisonRun.batch_id == 2).order_by(ComparisonRun.id.asc())
+        )
+        deleted_batch_runs = list(
+            db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).order_by(ComparisonRun.id.asc())
+        )
+        assert len(deleted_batch_runs) == 1
+        assert deleted_batch_runs[0].scope_type == "batch"
         assert remaining_batches[-1].total_manual == 1
         assert remaining_batches[-1].total_faltando_importado == 1
+        imports_page_response = imports_page(
+            make_request(app_module.app, path="/imports"),
+            db=db,
+        )
+        assert imports_page_response.status_code == 200
+        assert "lote-a.csv" not in imports_page_response.body.decode()
     finally:
         db.close()
 
@@ -568,11 +653,23 @@ def test_manual_apr_create_reruns_existing_comparisons(app_module):
         )
         assert comparison_response.status_code == 303
 
-        run_before = db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).one()
+        monthly_response = execute_comparison_by_competencia(
+            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+            competencia="2026-03",
+            db=db,
+        )
+        assert monthly_response.status_code == 303
+
+        run_before = (
+            db.query(ComparisonRun)
+            .filter(ComparisonRun.scope_type == "competencia", ComparisonRun.competencia == "2026-03")
+            .order_by(ComparisonRun.id.asc())
+            .first()
+        )
         assert run_before.total_manual == 0
         assert run_before.total_conciliado == 0
         assert run_before.total_faltando_manual == 2
-        assert run_before.scope_type == "batch"
+        assert run_before.scope_type == "competencia"
 
         create_response = manual_apr_create(
             make_request(app_module.app, method="POST", path="/manual-aprs"),
@@ -586,12 +683,49 @@ def test_manual_apr_create_reruns_existing_comparisons(app_module):
         )
         assert create_response.status_code == 303
 
-        runs = list(db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).order_by(ComparisonRun.id.asc()))
+        runs = list(
+            db.query(ComparisonRun)
+            .filter(ComparisonRun.scope_type == "competencia", ComparisonRun.competencia == "2026-03")
+            .order_by(ComparisonRun.id.asc())
+        )
         assert len(runs) == 2
         run_after = runs[-1]
         assert run_after.total_manual == 1
         assert run_after.total_conciliado == 1
         assert run_after.total_faltando_manual == 1
+    finally:
+        db.close()
+
+
+def test_flash_message_is_rendered_after_redirect(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        assert any(middleware.cls is SessionMiddleware for middleware in app_module.app.user_middleware)
+
+        request = make_request(app_module.app, method="POST", path="/manual-aprs")
+        request.scope["session"] = {}
+        response = manual_apr_create(
+            request,
+            apr_id="APR-FLASH-1",
+            data_referencia="2026-03-10",
+            responsavel="Maria",
+            descricao="Teste flash",
+            observacao="",
+            status_apr="ativo",
+            db=db,
+        )
+
+        assert response.status_code == 303
+        assert request.scope["session"]["_flash"]["message"] == (
+            "APR manual cadastrada com sucesso. Referência reconhecida: mês atual."
+        )
+
+        listing_request = make_request(app_module.app, path="/manual-aprs")
+        listing_request.scope["session"] = request.scope["session"]
+        listing = manual_apr_list(listing_request, db=db)
+
+        assert listing.status_code == 200
+        assert "APR manual cadastrada com sucesso. Referência reconhecida: mês atual." in listing.body.decode()
     finally:
         db.close()
 

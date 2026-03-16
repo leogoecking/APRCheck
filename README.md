@@ -1,6 +1,6 @@
 # Conciliador de APR
 
-Sistema web local para cadastro manual, importação CSV/XML e conciliação de APRs exclusivamente por `apr_id`.
+Sistema web local para cadastro manual, importação CSV/XML e conciliação mensal de APRs exclusivamente por `apr_id`.
 
 ## Arquitetura escolhida
 
@@ -33,26 +33,47 @@ APRCheck/
 
 ## Funcionalidades atuais
 
-- Dashboard com totais e resumo da última comparação.
+- Dashboard com totais e resumo da última comparação mensal.
 - Cadastro manual com criação, listagem, busca por ID, ordenação, edição e exclusão segura.
-- Importação manual em lote por texto colado.
-- Importação e exportação CSV da base manual.
-- Importação de CSV/XML com competência manual por lote.
-- Validação de IDs, tolerância a colunas extras e detecção de duplicados no lote.
-- Conciliação manual por lote ou por competência baseada somente em `apr_id`.
-- Campos visuais de apoio como `assunto` e `data de abertura`, sem impacto na lógica de conciliação.
+- Cadastro manual operando na interface com os campos `ID`, `Data de Abertura`, `Assunto` e `Colaborador`.
+- Reconhecimento automático de APR manual do mês atual, mês anterior ou outro mês.
+- Importação da base manual por arquivo `CSV`, `TSV` ou `TXT`.
+- Importação de arquivos externos `CSV/XML` com competência mensal.
+- Validação de IDs, tolerância a colunas extras e detecção de duplicados no importado.
+- Conciliação mensal baseada somente em `apr_id`.
 - Tela de divergências com filtros, paginação, exportação `XLSX` principal e `CSV` simples.
-- Atualização automática da visão consolidada por competência ao abrir/exportar divergências, mesmo quando só existem execuções por lote.
-- Histórico preservado de importações e comparações, sem sobrescrever execuções anteriores.
-- Trilho de auditoria para criação, edição, importação em lote e exclusão da base manual.
+- Histórico preservado de importações e comparações.
+- Remoção lógica de lotes importados, preservando o histórico de comparação.
+- Trilho de auditoria para criação, edição e exclusão da base manual.
+- Mensagens visuais de sucesso/erro com sessão web.
+
+## Alterações recentes
+
+- Removida a importação manual em lote por texto colado da área de cadastro manual.
+- Mantida a importação da base manual por arquivo `CSV/TSV/TXT`.
+- Ajustado o fluxo operacional para uso centrado em comparações mensais.
+- Removida da interface de importações a ação operacional de conciliar por lote; a ação principal agora é conciliar por mês.
+- Padronizada a competência para o formato `YYYY-MM`, com compatibilidade para entradas como `03/2026`.
+- Corrigido o feedback visual pós-redirect com suporte real a mensagens flash.
+- Alterada a exclusão de lote importado para exclusão lógica, preservando o histórico.
 
 ## Fluxo operacional recomendado
 
-1. Cadastre APRs manuais em `/manual-aprs`, individualmente ou por importação manual/CSV.
-2. Importe os lotes externos em `/imports`, informando a competência.
-3. Execute a conciliação por lote ou por competência.
-4. Analise divergências em `/divergences` e use `Exportar XLSX` para uma planilha mais legível.
-5. Consulte histórico e auditoria em `/history`.
+1. Cadastre APRs manuais em `/manual-aprs`, individualmente ou por importação de arquivo da base manual.
+2. Ao cadastrar manualmente, preencha `ID`, `Data de Abertura`, `Assunto` e `Colaborador`.
+3. Use a indicação visual para identificar rapidamente APRs do mês atual e do mês anterior.
+4. Importe os arquivos externos em `/imports`, sempre informando a competência mensal.
+5. Execute a conciliação do mês pela competência.
+6. Analise divergências em `/divergences` e use `Exportar XLSX` para uma planilha mais legível.
+7. Consulte histórico e auditoria em `/history`.
+
+## Regras operacionais importantes
+
+- A conciliação continua sendo feita exclusivamente por `apr_id`.
+- A interface manual não usa mais importação por texto/lote.
+- A operação principal de comparação é mensal.
+- O sistema aceita competências em formatos equivalentes como `2026-03` e `03/2026`, mas normaliza internamente para `YYYY-MM`.
+- Excluir um lote importado remove o lote da área operacional, mas preserva o histórico já gerado.
 
 ## Instalação no Debian
 

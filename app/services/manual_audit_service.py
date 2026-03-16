@@ -6,9 +6,8 @@ from app.models.entities import ManualAPR, ManualAPRAuditLog
 def build_manual_apr_summary(manual_apr: ManualAPR) -> str:
     parts = [
         f"apr_id={manual_apr.apr_id}",
-        f"data_referencia={manual_apr.data_referencia.isoformat() if manual_apr.data_referencia else ''}",
-        f"responsavel={manual_apr.responsavel or ''}",
-        f"status={manual_apr.status or ''}",
+        f"data_abertura={manual_apr.data_referencia.isoformat() if manual_apr.data_referencia else ''}",
+        f"colaborador={manual_apr.responsavel or ''}",
         f"assunto={manual_apr.descricao or ''}",
     ]
     return " | ".join(parts)

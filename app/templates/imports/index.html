@@ -4,7 +4,7 @@
 <section class="page-header">
     <div>
         <h1>Importação de arquivos</h1>
-        <p>Envie um CSV, TSV, TXT ou XML, informe a competência e gere um lote pronto para conciliação.</p>
+        <p>Envie um CSV, TSV, TXT ou XML, informe a competência e use a conciliação mensal.</p>
     </div>
 </section>
 
@@ -73,12 +73,9 @@
             <p class="muted">{{ selected_batch.nome_arquivo }} | competência {{ selected_batch.competencia }}</p>
         </div>
         <div class="actions">
-            <form method="post" action="/comparisons/run/{{ selected_batch.id }}">
-                <button class="button" type="submit">Conciliar lote</button>
-            </form>
             <form method="post" action="/comparisons/run-by-competencia">
                 <input type="hidden" name="competencia" value="{{ selected_batch.competencia }}">
-                <button class="button button-secondary" type="submit">Conciliar competência</button>
+                <button class="button" type="submit">Conciliar mês</button>
             </form>
             <a class="button danger-button" href="/imports/{{ selected_batch.id }}/delete">Excluir lote</a>
         </div>
@@ -89,11 +86,8 @@
         <div><span class="label">Inválidos</span><strong>{{ selected_batch.total_invalidos }}</strong></div>
         <div><span class="label">Duplicados</span><strong>{{ selected_batch.total_duplicados }}</strong></div>
     </div>
-    {% if selected_batch_latest_batch_run %}
-    <p class="muted">Última comparação deste lote: <a href="/comparisons/{{ selected_batch_latest_batch_run.id }}">abrir resultado</a>.</p>
-    {% endif %}
     {% if selected_batch_latest_competencia_run %}
-    <p class="muted">Última comparação da competência {{ selected_batch.competencia }}: <a href="/comparisons/{{ selected_batch_latest_competencia_run.id }}">abrir resultado consolidado</a>.</p>
+    <p class="muted">Última comparação do mês {{ selected_batch.competencia }}: <a href="/comparisons/{{ selected_batch_latest_competencia_run.id }}">abrir resultado</a>.</p>
     {% endif %}
     <div class="table-wrap">
         <table>

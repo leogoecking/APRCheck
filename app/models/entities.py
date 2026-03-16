@@ -43,6 +43,7 @@ class ImportBatch(TimestampMixin, Base):
     total_validos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_invalidos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_duplicados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True, index=True)
 
     imported_aprs: Mapped[list["ImportedAPR"]] = relationship(
         back_populates="batch",

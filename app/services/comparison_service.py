@@ -8,14 +8,20 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.entities import ComparisonItem, ComparisonRun, ImportBatch, ImportedAPR, ManualAPR
-from app.services.apr_utils import detect_open_date_key, detect_subject_key, normalize_open_date
+from app.services.apr_utils import (
+    competencia_variants,
+    detect_open_date_key,
+    detect_subject_key,
+    normalize_competencia,
+    normalize_open_date,
+)
 
 
 def run_batch_comparison(db: Session, batch_id: int) -> ComparisonRun | None:
     batch = db.scalar(
         select(ImportBatch)
         .options(selectinload(ImportBatch.imported_aprs))
-        .where(ImportBatch.id == batch_id)
+        .where(ImportBatch.id == batch_id, ImportBatch.deleted_at.is_(None))
     )
     if batch is None:
         return None
@@ -32,15 +38,17 @@ def run_batch_comparison(db: Session, batch_id: int) -> ComparisonRun | None:
 
 
 def run_competencia_comparison(db: Session, competencia: str) -> ComparisonRun | None:
-    cleaned_competencia = competencia.strip()
+    cleaned_competencia = normalize_competencia(competencia)
     if not cleaned_competencia:
         return None
+
+    variants = competencia_variants(cleaned_competencia)
 
     batches = list(
         db.scalars(
             select(ImportBatch)
             .options(selectinload(ImportBatch.imported_aprs))
-            .where(ImportBatch.competencia == cleaned_competencia)
+            .where(ImportBatch.deleted_at.is_(None), ImportBatch.competencia.in_(variants))
             .order_by(ImportBatch.created_at.asc(), ImportBatch.id.asc())
         )
     )
@@ -151,9 +159,14 @@ def _create_comparison_run(
 
 
 def _load_manual_ids_for_competencia(db: Session, competencia: str) -> set[str]:
+    normalized_competencia = normalize_competencia(competencia)
+    if normalized_competencia is None:
+        return set()
     return set(
         db.scalars(
-            select(ManualAPR.apr_id).where(func.strftime("%Y-%m", ManualAPR.data_referencia) == competencia)
+            select(ManualAPR.apr_id).where(
+                func.strftime("%Y-%m", ManualAPR.data_referencia) == normalized_competencia
+            )
         )
     )
 
@@ -217,38 +230,19 @@ def rerun_latest_comparisons_for_competencias(
 ) -> list[ComparisonRun]:
     results: list[ComparisonRun] = []
     for competencia in sorted(filter(None, competencias)):
-        batch_ids = list(
-            db.scalars(
-                select(ImportBatch.id)
-                .where(ImportBatch.competencia == competencia)
-                .order_by(ImportBatch.id.asc())
-            )
-        )
-        for batch_id in batch_ids:
-            latest_run = db.scalar(
-                select(ComparisonRun)
-                .where(
-                    ComparisonRun.scope_type == "batch",
-                    ComparisonRun.batch_id == batch_id,
-                )
-                .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
-            )
-            if latest_run is None:
-                continue
-            comparison_run = run_batch_comparison(db, latest_run.batch_id)
-            if comparison_run is not None:
-                results.append(comparison_run)
-
+        normalized_competencia = normalize_competencia(competencia)
+        if normalized_competencia is None:
+            continue
         latest_competencia_run = db.scalar(
             select(ComparisonRun)
             .where(
                 ComparisonRun.scope_type == "competencia",
-                ComparisonRun.scope_value == competencia,
+                ComparisonRun.scope_value == normalized_competencia,
             )
             .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
         )
         if latest_competencia_run is not None:
-            comparison_run = run_competencia_comparison(db, competencia)
+            comparison_run = run_competencia_comparison(db, normalized_competencia)
             if comparison_run is not None:
                 results.append(comparison_run)
     return results
@@ -266,40 +260,40 @@ def ensure_latest_competencia_runs(
             db.scalars(
                 select(ImportBatch.competencia)
                 .distinct()
+                .where(ImportBatch.deleted_at.is_(None))
                 .order_by(ImportBatch.competencia.asc())
             )
         )
     )
     results: list[ComparisonRun] = []
     for item in competencias:
-        if not item:
+        normalized_item = normalize_competencia(item)
+        if not normalized_item:
             continue
-        latest_batch_run = db.scalar(
-            select(ComparisonRun)
-            .where(
-                ComparisonRun.scope_type == "batch",
-                ComparisonRun.competencia == item,
-            )
-            .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
-        )
         latest_competencia_run = db.scalar(
             select(ComparisonRun)
             .where(
                 ComparisonRun.scope_type == "competencia",
-                ComparisonRun.scope_value == item,
+                ComparisonRun.scope_value == normalized_item,
             )
             .order_by(ComparisonRun.created_at.desc(), ComparisonRun.id.desc())
         )
 
         needs_refresh = latest_competencia_run is None
-        if latest_batch_run is not None and latest_competencia_run is not None:
-            needs_refresh = (
-                latest_batch_run.created_at > latest_competencia_run.created_at
-                or latest_batch_run.id > latest_competencia_run.id
+        if latest_competencia_run is not None:
+            latest_import = db.scalar(
+                select(ImportBatch.created_at)
+                .where(
+                    ImportBatch.deleted_at.is_(None),
+                    ImportBatch.competencia.in_(competencia_variants(normalized_item)),
+                )
+                .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
             )
+            if latest_import is not None:
+                needs_refresh = latest_import > latest_competencia_run.created_at
 
         if needs_refresh:
-            comparison_run = run_competencia_comparison(db, item)
+            comparison_run = run_competencia_comparison(db, normalized_item)
             if comparison_run is not None:
                 results.append(comparison_run)
     return results

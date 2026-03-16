@@ -14,12 +14,12 @@ from app.schemas.forms import ManualAPRInput
 from app.services.comparison_service import competencia_from_date, rerun_latest_comparisons_for_competencias
 from app.services.manual_apr_service import (
     ManualAPRConflictError,
+    classify_manual_reference_month,
     create_manual_apr,
     delete_manual_apr,
     export_manual_aprs_csv_rows,
     get_manual_apr,
     import_manual_aprs_from_csv_bytes,
-    import_manual_aprs_from_text,
     list_manual_aprs,
     update_manual_apr,
 )
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/manual-aprs", tags=["manual-aprs"])
 
 
 def _manual_sort_state(sort: str | None, direction: str | None) -> tuple[str, str]:
-    allowed_sorts = {"apr_id", "data_referencia", "responsavel", "status", "updated_at"}
+    allowed_sorts = {"apr_id", "data_referencia", "descricao", "responsavel", "updated_at"}
     safe_sort = sort if sort in allowed_sorts else "updated_at"
     safe_direction = "asc" if direction == "asc" else "desc"
     return safe_sort, safe_direction
@@ -51,17 +51,19 @@ def manual_apr_list(
         page,
         15,
     )
+    reference_labels = {
+        item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
+    }
     context = {
         "request": request,
         "manual_aprs": pagination["items"],
+        "reference_labels": reference_labels,
         "query": q or "",
         "sort": safe_sort,
         "direction": safe_direction,
         "pagination": pagination,
         "form_data": {},
         "form_errors": [],
-        "import_errors": [],
-        "import_form_data": "",
         "flash": pop_flash(request),
     }
     return request.app.state.templates.TemplateResponse(request, "manual_aprs/index.html", context)
@@ -102,14 +104,15 @@ def manual_apr_create(
         context = {
             "request": request,
             "manual_aprs": pagination["items"],
+            "reference_labels": {
+                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
+            },
             "query": "",
             "sort": safe_sort,
             "direction": safe_direction,
             "pagination": pagination,
             "form_data": form_data,
             "form_errors": [str(exc)],
-            "import_errors": [],
-            "import_form_data": "",
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
@@ -125,14 +128,15 @@ def manual_apr_create(
         context = {
             "request": request,
             "manual_aprs": pagination["items"],
+            "reference_labels": {
+                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
+            },
             "query": "",
             "sort": safe_sort,
             "direction": safe_direction,
             "pagination": pagination,
             "form_data": form_data,
             "form_errors": errors,
-            "import_errors": [],
-            "import_form_data": "",
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
@@ -146,47 +150,13 @@ def manual_apr_create(
         db,
         {competencia_from_date(payload.data_referencia)} - {None},
     )
-    set_flash(request, "success", "APR manual cadastrada com sucesso.")
-    return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post("/import")
-def manual_apr_import(
-    request: Request,
-    import_text: str = Form(...),
-    db: Session = Depends(get_db),
-) -> object:
-    try:
-        result = import_manual_aprs_from_text(db, import_text)
-    except (ManualAPRConflictError, ValidationError, ValueError) as exc:
-        errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
-        safe_sort, safe_direction = _manual_sort_state(None, None)
-        pagination = paginate(list_manual_aprs(db, None, sort_by=safe_sort, direction=safe_direction), 1, 15)
-        context = {
-            "request": request,
-            "manual_aprs": pagination["items"],
-            "query": "",
-            "sort": safe_sort,
-            "direction": safe_direction,
-            "pagination": pagination,
-            "form_data": {},
-            "form_errors": [],
-            "import_errors": errors,
-            "import_form_data": import_text,
-            "flash": None,
-        }
-        return request.app.state.templates.TemplateResponse(
-            request,
-            "manual_aprs/index.html",
-            context,
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    rerun_latest_comparisons_for_competencias(db, result.competencias_afetadas)
-    message = f"Importação manual concluída: {result.created_count} criada(s)"
-    if result.skipped_count:
-        message += f", {result.skipped_count} ignorada(s)"
-    set_flash(request, "success", message + ".")
+    classification = classify_manual_reference_month(payload.data_referencia)
+    message = "APR manual cadastrada com sucesso."
+    if classification == "mes_atual":
+        message += " Referência reconhecida: mês atual."
+    elif classification == "mes_anterior":
+        message += " Referência reconhecida: mês anterior."
+    set_flash(request, "success", message)
     return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -209,14 +179,15 @@ def manual_apr_import_csv(
         context = {
             "request": request,
             "manual_aprs": pagination["items"],
+            "reference_labels": {
+                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
+            },
             "query": "",
             "sort": safe_sort,
             "direction": safe_direction,
             "pagination": pagination,
             "form_data": {},
-            "form_errors": [],
-            "import_errors": errors,
-            "import_form_data": "",
+            "form_errors": errors,
             "flash": None,
         }
         return request.app.state.templates.TemplateResponse(
@@ -227,7 +198,7 @@ def manual_apr_import_csv(
         )
 
     rerun_latest_comparisons_for_competencias(db, result.competencias_afetadas)
-    message = f"Importação CSV concluída: {result.created_count} criada(s)"
+    message = f"Importação CSV/TXT concluída: {result.created_count} criada(s)"
     if result.skipped_count:
         message += f", {result.skipped_count} ignorada(s)"
     set_flash(request, "success", message + ".")
@@ -246,6 +217,7 @@ def manual_apr_delete_confirm(
     context = {
         "request": request,
         "manual_apr": manual_apr,
+        "reference_label": classify_manual_reference_month(manual_apr.data_referencia),
         "flash": pop_flash(request),
     }
     return request.app.state.templates.TemplateResponse(
@@ -310,6 +282,7 @@ def manual_apr_edit_form(request: Request, manual_apr_id: int, db: Session = Dep
     context = {
         "request": request,
         "manual_apr": manual_apr,
+        "reference_label": classify_manual_reference_month(manual_apr.data_referencia),
         "form_errors": [],
         "flash": pop_flash(request),
     }
@@ -338,14 +311,15 @@ def manual_apr_edit(
             data_referencia=parse_optional_date(data_referencia),
             responsavel=responsavel,
             descricao=descricao,
-            observacao=observacao,
-            status=status_apr,
+            observacao=manual_apr.observacao if observacao is None else observacao,
+            status=manual_apr.status if status_apr is None else status_apr,
         )
         update_manual_apr(db, manual_apr, payload)
     except ManualAPRConflictError as exc:
         context = {
             "request": request,
             "manual_apr": manual_apr,
+            "reference_label": classify_manual_reference_month(manual_apr.data_referencia),
             "form_errors": [str(exc)],
             "flash": None,
         }
@@ -360,6 +334,7 @@ def manual_apr_edit(
         context = {
             "request": request,
             "manual_apr": manual_apr,
+            "reference_label": classify_manual_reference_month(manual_apr.data_referencia),
             "form_errors": errors,
             "flash": None,
         }
@@ -374,5 +349,11 @@ def manual_apr_edit(
         db,
         {previous_competencia, competencia_from_date(payload.data_referencia)} - {None},
     )
-    set_flash(request, "success", "APR manual atualizada com sucesso.")
+    classification = classify_manual_reference_month(payload.data_referencia)
+    message = "APR manual atualizada com sucesso."
+    if classification == "mes_atual":
+        message += " Referência reconhecida: mês atual."
+    elif classification == "mes_anterior":
+        message += " Referência reconhecida: mês anterior."
+    set_flash(request, "success", message)
     return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
