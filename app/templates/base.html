@@ -4,6 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Conciliador de APR{% endblock %}</title>
+    <script>
+        (function () {
+            var storedTheme = null;
+            try {
+                storedTheme = window.localStorage.getItem("theme");
+            } catch (error) {
+                storedTheme = null;
+            }
+            var theme = storedTheme;
+            if (!theme) {
+                theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            }
+            document.documentElement.setAttribute("data-theme", theme);
+        })();
+    </script>
     <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
 </head>
 <body>
@@ -20,6 +35,7 @@
                 <a href="/divergences">Divergências</a>
                 <a href="/history">Histórico</a>
             </nav>
+            <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Alternar modo escuro">Modo escuro</button>
         </div>
     </header>
     <main class="container content">
@@ -28,5 +44,32 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+    <script>
+        (function () {
+            var root = document.documentElement;
+            var toggle = document.getElementById("theme-toggle");
+            if (!toggle) {
+                return;
+            }
+
+            function applyTheme(theme) {
+                root.setAttribute("data-theme", theme);
+                toggle.textContent = theme === "dark" ? "Modo claro" : "Modo escuro";
+                toggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+            }
+
+            applyTheme(root.getAttribute("data-theme") || "light");
+
+            toggle.addEventListener("click", function () {
+                var nextTheme = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+                applyTheme(nextTheme);
+                try {
+                    window.localStorage.setItem("theme", nextTheme);
+                } catch (error) {
+                    // Persistencia de preferencia e opcional; ignorar falhas do navegador.
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

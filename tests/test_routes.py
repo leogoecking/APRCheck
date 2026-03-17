@@ -708,6 +708,20 @@ def test_flash_message_is_rendered_after_redirect(app_module):
         db.close()
 
 
+def test_base_layout_exposes_theme_toggle(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        response = dashboard(make_request(app_module.app, method="GET", path="/"), db=db)
+        body = response.body.decode()
+
+        assert response.status_code == 200
+        assert 'id="theme-toggle"' in body
+        assert 'localStorage.getItem("theme")' in body
+        assert 'data-theme' in body
+    finally:
+        db.close()
+
+
 def test_execute_comparison_by_competencia_creates_consolidated_run(app_module):
     db = app_module.db_module.SessionLocal()
     try:

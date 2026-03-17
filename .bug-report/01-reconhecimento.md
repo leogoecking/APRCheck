@@ -2,7 +2,7 @@
 
 ## Stack detectada
 
-- Linguagem principal: Python 3.13.5
+- Linguagem principal: Python 3.11.2 no `.venv`
 - Framework web: FastAPI
 - Templates: Jinja2
 - ORM/acesso a dados: SQLAlchemy 2.x
@@ -22,6 +22,7 @@
 
 - `python3`: disponível
 - `.venv/bin/python`: disponível
+- `.venv/bin/pip`: disponível
 - `sqlite3`: disponível
 - `pytest`: disponível via `.venv/bin/pytest`
 - `git`: disponível
@@ -61,5 +62,6 @@
 ## Limitações encontradas
 
 - `rg` não está instalado, então a inspeção textual foi feita com `find`, `sed` e `nl`.
+- O ambiente virtual atual estava inconsistente com o código: `itsdangerous` não estava instalado, apesar de a aplicação depender de `SessionMiddleware`.
 - Não há suíte end-to-end/browser; os testes cobrem bem serviços e rotas, mas não validam fluxos reais de sessão/flash no navegador.
 - O repositório já contém `data/app.db`, então reproduções isoladas foram feitas com bancos temporários em `/tmp` para evitar interferência.

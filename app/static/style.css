@@ -11,6 +11,31 @@
     --danger-dark: #8e3322;
     --success-bg: #e5f5ee;
     --error-bg: #f9e5e2;
+    --topbar-bg: rgba(255, 255, 255, 0.92);
+    --page-gradient: linear-gradient(180deg, #efe8de 0%, #f7f4ef 45%, #f3efe8 100%);
+    --shadow: 0 10px 24px rgba(47, 38, 29, 0.06);
+    --secondary-hover: #f3ece2;
+    --table-border: #eadfce;
+}
+
+:root[data-theme="dark"] {
+    --bg: #0f1718;
+    --surface: #172224;
+    --surface-strong: #223133;
+    --border: #31494c;
+    --text: #edf3ed;
+    --muted: #9eb2aa;
+    --accent: #73c7b4;
+    --accent-dark: #58a896;
+    --danger: #db876d;
+    --danger-dark: #c06b54;
+    --success-bg: #14362f;
+    --error-bg: #422622;
+    --topbar-bg: rgba(16, 24, 25, 0.88);
+    --page-gradient: radial-gradient(circle at top, #243739 0%, #132022 42%, #0d1516 100%);
+    --shadow: 0 16px 32px rgba(0, 0, 0, 0.32);
+    --secondary-hover: #223133;
+    --table-border: #2a3e40;
 }
 
 * {
@@ -20,7 +45,7 @@
 body {
     margin: 0;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(180deg, #efe8de 0%, #f7f4ef 45%, #f3efe8 100%);
+    background: var(--page-gradient);
     color: var(--text);
 }
 
@@ -39,11 +64,12 @@ a:hover {
 }
 
 .topbar {
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--topbar-bg);
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
     backdrop-filter: blur(12px);
+    z-index: 10;
 }
 
 .topbar-inner {
@@ -76,6 +102,21 @@ a:hover {
 .nav a {
     color: var(--text);
     font-weight: 600;
+}
+
+.theme-toggle {
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.theme-toggle:hover {
+    background: var(--secondary-hover);
 }
 
 .content {
@@ -118,7 +159,7 @@ a:hover {
     border: 1px solid var(--border);
     border-radius: 18px;
     padding: 20px;
-    box-shadow: 0 10px 24px rgba(47, 38, 29, 0.06);
+    box-shadow: var(--shadow);
     margin-bottom: 20px;
 }
 
@@ -253,7 +294,7 @@ textarea {
 }
 
 .button-secondary:hover {
-    background: #f3ece2;
+    background: var(--secondary-hover);
 }
 
 .danger-button {
@@ -292,7 +333,7 @@ th,
 td {
     padding: 12px 10px;
     text-align: left;
-    border-bottom: 1px solid #eadfce;
+    border-bottom: 1px solid var(--table-border);
     vertical-align: top;
 }
 
@@ -312,5 +353,9 @@ th {
 
     .nav {
         justify-content: space-between;
+    }
+
+    .theme-toggle {
+        width: 100%;
     }
 }

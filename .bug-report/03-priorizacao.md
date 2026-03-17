@@ -2,6 +2,26 @@
 
 ```json
 {
+  "id": "BUG-006",
+  "tipo": "bug_reproduzivel",
+  "severidade": "alta",
+  "confianca": "alta",
+  "arquivo": "requirements.txt",
+  "sintoma": "A aplicacao falha na inicializacao com ModuleNotFoundError: No module named 'itsdangerous'.",
+  "causa_raiz": "O codigo passou a depender de SessionMiddleware em app/main.py, mas o manifesto de dependencias nao declara itsdangerous, pacote exigido por starlette.middleware.sessions.",
+  "evidencia": [
+    "import direto de app.main falhou com ModuleNotFoundError",
+    "import direto de itsdangerous no .venv falhou",
+    "requirements.txt nao contem itsdangerous",
+    "app/main.py importa SessionMiddleware"
+  ],
+  "correcao_recomendada": "Adicionar itsdangerous ao requirements.txt e validar a inicializacao em um ambiente com a dependencia instalada.",
+  "corrigir_agora": true
+}
+```
+
+```json
+{
   "id": "BUG-004",
   "tipo": "bug_reproduzivel",
   "severidade": "alta",

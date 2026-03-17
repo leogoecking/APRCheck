@@ -2,13 +2,35 @@
 
 ## Contexto desta rodada
 
-- Comando executado: `.venv/bin/pytest`
-- Resultado observado: `32 passed in 3.35s`
-- Leitura adicional focada em fluxos alterados recentemente:
-  - comparação mensal
-  - dashboard
-  - histórico
-  - cadastro manual
+- Inspeção adicional focada em inicialização da aplicação e dependências declaradas.
+- Comandos executados nesta rodada:
+  - `./.venv/bin/python -c "import itsdangerous; print(itsdangerous.__version__)"`
+  - `./.venv/bin/python -c "import app.main"`
+  - inspeção de `requirements.txt` e `app/main.py`
+
+## BUG-006
+
+- Tipo: `bug_reproduzivel`
+- Método:
+  - inspeção de `app/main.py`
+  - inspeção de `requirements.txt`
+  - reprodução por import direto do módulo
+- Saída observada:
+  - `ModuleNotFoundError: No module named 'itsdangerous'`
+  - a falha ocorre ao importar `starlette.middleware.sessions.SessionMiddleware`
+  - `requirements.txt` não declara `itsdangerous`
+- Impacto:
+  - a aplicação não sobe porque `app.main` falha durante o import
+  - qualquer fluxo que dependa de `run.sh`, `uvicorn` ou dos testes de rotas fica bloqueado se o ambiente for recriado a partir do manifesto atual
+- Por que isso é evidência:
+  - `app/main.py` importa `SessionMiddleware` explicitamente
+  - a implementação de `starlette.middleware.sessions` importa `itsdangerous`
+  - a dependência não está no manifesto do projeto, então um ambiente criado com `pip install -r requirements.txt` pode ficar incompleto para o código atual
+- Arquivos afetados:
+  - `requirements.txt`
+  - `app/main.py`
+- Reprodução: bem-sucedida
+- Confiança: alta
 
 ## BUG-004
 
