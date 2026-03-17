@@ -4,9 +4,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import ComparisonRun, ImportBatch, ImportedAPR, ManualAPR
+from app.services.comparison_service import ensure_latest_competencia_runs
 
 
 def get_dashboard_summary(db: Session) -> dict[str, object]:
+    ensure_latest_competencia_runs(db, competencia=None)
     total_manual = db.scalar(select(func.count()).select_from(ManualAPR)) or 0
     total_imported = db.scalar(select(func.count()).select_from(ImportedAPR)) or 0
     total_batches = db.scalar(select(func.count()).select_from(ImportBatch)) or 0

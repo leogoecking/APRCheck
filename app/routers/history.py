@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.models.entities import ComparisonRun, ImportBatch, ManualAPRAuditLog
+from app.services.comparison_service import ensure_latest_competencia_runs
 from app.utils.web import paginate, pop_flash
 
 
@@ -30,6 +31,7 @@ def history_page(
     comparison_direction: str | None = None,
     db: Session = Depends(get_db),
 ) -> object:
+    ensure_latest_competencia_runs(db, competencia=None)
     import_sort, import_direction = _history_sort_state(
         import_sort,
         import_direction,

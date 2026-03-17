@@ -15,6 +15,7 @@ from app.routers.comparisons import (
     execute_comparison,
     execute_comparison_by_competencia,
 )
+from app.routers.dashboard import dashboard
 from app.routers.divergences import (
     build_divergence_export_rows,
     build_divergence_xlsx_bytes,
@@ -316,18 +317,21 @@ def test_import_run_comparison_and_export(app_module):
         assert response.status_code == 303
         assert "batch_id=1" in response.headers["location"]
 
-        comparison = execute_comparison(
+        blocked_comparison = execute_comparison(
             make_request(app_module.app, method="POST", path="/comparisons/run/1"),
             batch_id=1,
             db=db,
         )
-        assert comparison.status_code == 303
-        assert comparison.headers["location"] == "/comparisons/1"
-        execute_comparison_by_competencia(
+        assert blocked_comparison.status_code == 303
+        assert blocked_comparison.headers["location"] == "/imports?batch_id=1"
+
+        comparison = execute_comparison_by_competencia(
             make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
             competencia="2026-03",
             db=db,
         )
+        assert comparison.status_code == 303
+        assert comparison.headers["location"] == "/comparisons/1"
 
         detail = comparison_detail(
             make_request(app_module.app, path="/comparisons/1"),
@@ -428,16 +432,6 @@ def test_divergences_prioritize_apr_id_and_month_view(app_module):
             )
             assert response.status_code == 303
 
-        execute_comparison(
-            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
-            batch_id=1,
-            db=db,
-        )
-        execute_comparison(
-            make_request(app_module.app, method="POST", path="/comparisons/run/2"),
-            batch_id=2,
-            db=db,
-        )
         execute_comparison_by_competencia(
             make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
             competencia="2026-03",
@@ -505,16 +499,6 @@ def test_import_batch_delete_requires_confirmation_and_updates_remaining_compete
             )
             assert response.status_code == 303
 
-        execute_comparison(
-            make_request(app_module.app, method="POST", path="/comparisons/run/1"),
-            batch_id=1,
-            db=db,
-        )
-        execute_comparison(
-            make_request(app_module.app, method="POST", path="/comparisons/run/2"),
-            batch_id=2,
-            db=db,
-        )
         execute_comparison_by_competencia(
             make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
             competencia="2026-03",
@@ -545,16 +529,14 @@ def test_import_batch_delete_requires_confirmation_and_updates_remaining_compete
         )
         assert valid_delete.status_code == 303
 
-        remaining_batches = list(
-            db.query(ComparisonRun).filter(ComparisonRun.batch_id == 2).order_by(ComparisonRun.id.asc())
+        monthly_runs = list(
+            db.query(ComparisonRun)
+            .filter(ComparisonRun.scope_type == "competencia", ComparisonRun.competencia == "2026-03")
+            .order_by(ComparisonRun.id.asc())
         )
-        deleted_batch_runs = list(
-            db.query(ComparisonRun).filter(ComparisonRun.batch_id == 1).order_by(ComparisonRun.id.asc())
-        )
-        assert len(deleted_batch_runs) == 1
-        assert deleted_batch_runs[0].scope_type == "batch"
-        assert remaining_batches[-1].total_manual == 1
-        assert remaining_batches[-1].total_faltando_importado == 1
+        assert len(monthly_runs) == 2
+        assert monthly_runs[-1].total_manual == 1
+        assert monthly_runs[-1].total_faltando_importado == 1
         imports_page_response = imports_page(
             make_request(app_module.app, path="/imports"),
             db=db,
@@ -592,16 +574,11 @@ def test_divergences_and_history_support_pagination(app_module):
                 db=db,
             )
             assert response.status_code == 303
-            execute_comparison(
-                make_request(app_module.app, method="POST", path=f"/comparisons/run/{index + 1}"),
-                batch_id=index + 1,
+            execute_comparison_by_competencia(
+                make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
+                competencia="2026-03",
                 db=db,
             )
-        execute_comparison_by_competencia(
-            make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
-            competencia="2026-03",
-            db=db,
-        )
 
         divergences = divergences_page(
             make_request(app_module.app, path="/divergences"),
@@ -652,6 +629,7 @@ def test_manual_apr_create_reruns_existing_comparisons(app_module):
             db=db,
         )
         assert comparison_response.status_code == 303
+        assert comparison_response.headers["location"] == "/imports?batch_id=1"
 
         monthly_response = execute_comparison_by_competencia(
             make_request(app_module.app, method="POST", path="/comparisons/run-by-competencia"),
@@ -769,5 +747,47 @@ def test_execute_comparison_by_competencia_creates_consolidated_run(app_module):
         assert run.total_conciliado == 1
         assert run.total_faltando_manual == 1
         assert run.total_duplicados == 1
+    finally:
+        db.close()
+
+
+def test_legacy_batch_runs_are_backfilled_into_monthly_views(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-BACKFILL-1",
+            data_referencia="2026-03-01",
+            responsavel="Equipe",
+            descricao=None,
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+        import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-BACKFILL-1,Conciliado\nAPR-BACKFILL-2,Novo\n"),
+            ),
+            db=db,
+        )
+
+        from app.services.comparison_service import run_batch_comparison
+
+        batch_run = run_batch_comparison(db, 1)
+        assert batch_run is not None
+        assert batch_run.scope_type == "batch"
+        assert db.query(ComparisonRun).filter_by(scope_type="competencia").count() == 0
+
+        dashboard_response = dashboard(make_request(app_module.app, method="GET", path="/"), db=db)
+        history_response = history_page(make_request(app_module.app, path="/history"), db=db)
+
+        assert dashboard_response.status_code == 200
+        assert history_response.status_code == 200
+        assert db.query(ComparisonRun).filter_by(scope_type="competencia").count() == 1
+        assert "2026-03" in dashboard_response.body.decode()
+        assert "Nenhuma comparação registrada." not in history_response.body.decode()
     finally:
         db.close()

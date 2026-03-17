@@ -11,7 +11,6 @@ from app.services.comparison_service import (
     build_import_preview_map,
     get_comparison_run,
     parse_source_batch_ids,
-    run_batch_comparison,
     run_competencia_comparison,
 )
 from app.utils.web import pop_flash, set_flash
@@ -22,12 +21,9 @@ router = APIRouter(prefix="/comparisons", tags=["comparisons"])
 
 @router.post("/run/{batch_id}")
 def execute_comparison(request: Request, batch_id: int, db: Session = Depends(get_db)) -> object:
-    comparison_run = run_batch_comparison(db, batch_id)
-    if comparison_run is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote não encontrado.")
-    set_flash(request, "success", "Conciliação executada com sucesso.")
+    set_flash(request, "error", "Comparação por lote desativada. Use a comparação por competência.")
     return RedirectResponse(
-        url=f"/comparisons/{comparison_run.id}",
+        url=f"/imports?batch_id={batch_id}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 

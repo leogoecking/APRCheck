@@ -1,90 +1,56 @@
 # 02 - Achados
 
-## BUG-001
+## Contexto desta rodada
+
+- Comando executado: `.venv/bin/pytest`
+- Resultado observado: `32 passed in 3.35s`
+- Leitura adicional focada em fluxos alterados recentemente:
+  - comparação mensal
+  - dashboard
+  - histórico
+  - cadastro manual
+
+## BUG-004
 
 - Tipo: `bug_reproduzivel`
 - Método:
-  - inspeção de `app/main.py`, `app/utils/web.py` e `app/templates/base.html`
-  - comando executado: `.venv/bin/python -c "from app.main import create_app; app=create_app(); print(app.user_middleware)"`
-- Saída/observação:
-  - `app.user_middleware` retornou `[]`
-  - `set_flash()` e `pop_flash()` retornam sem efeito quando `"session"` não existe no `request.scope`
-  - o template base renderiza alertas apenas a partir de `flash`
-- Impacto:
-  - mensagens de sucesso após redirects nunca chegam ao usuário
-  - o projeto promete feedback visual claro, mas o fluxo real perde confirmações como cadastro/importação/conciliação bem-sucedidos
-- Por que isso é evidência:
-  - as rotas chamam `set_flash(...)`, porém a aplicação não registra `SessionMiddleware`
-  - sem middleware de sessão, `request.session` não existe e o utilitário sai silenciosamente
-- Arquivos afetados:
-  - `app/main.py`
-  - `app/utils/web.py`
-  - `app/templates/base.html`
-- Reprodução: bem-sucedida por inspeção + verificação objetiva do middleware
-- Confiança: alta
-
-## BUG-002
-
-- Tipo: `bug_reproduzivel`
-- Método:
-  - comando executado em banco temporário:
-    - `APP_DATABASE_URL=sqlite:////tmp/aprcheck_comp_test.db .venv/bin/python -c "... ImportBatchInput(competencia='03/2026') ... run_competencia_comparison(db, '03/2026') ..."`
+  - inspeção de `app/routers/comparisons.py`
+  - reprodução em banco temporário com chamada direta de `POST /comparisons/run/{batch_id}`
 - Saída observada:
-  - `run_total_manual 0`
-  - `run_total_conciliado 0`
-  - `run_total_faltando_manual 1`
+  - `status 303`
+  - `scope_type batch`
+  - `scope_value 1`
 - Impacto:
-  - um lote com competência em formato livre gera divergência falsa, mesmo quando o `apr_id` existe manualmente no mesmo mês
-  - isso compromete a conciliação por competência e o dashboard/histórico derivados dela
+  - o sistema continua aceitando comparação por lote mesmo após a regra operacional ter sido migrada para comparação mensal
+  - isso permite gerar novas execuções fora do fluxo que a interface agora comunica ao usuário
 - Por que isso é evidência:
-  - `ImportBatchInput` apenas faz `strip()`
-  - `_load_manual_ids_for_competencia()` compara a competência contra `strftime("%Y-%m", ManualAPR.data_referencia)`
-  - qualquer formato fora de `YYYY-MM` quebra a correspondência
+  - o endpoint `/comparisons/run/{batch_id}` continua registrado e operacional
+  - a execução produz `ComparisonRun.scope_type == "batch"` em ambiente isolado
 - Arquivos afetados:
-  - `app/schemas/forms.py`
+  - `app/routers/comparisons.py`
   - `app/services/comparison_service.py`
 - Reprodução: bem-sucedida
 - Confiança: alta
 
-## BUG-003
+## BUG-005
 
 - Tipo: `bug_reproduzivel`
 - Método:
-  - inspeção de `app/models/entities.py` e `app/services/import_service.py`
-  - comando executado em banco temporário:
-    - `APP_DATABASE_URL=sqlite:////tmp/aprcheck_history_test.db .venv/bin/python -c "... run_batch_comparison(db, batch.id) ... delete_import_batch(db, batch) ..."`
+  - reprodução em banco temporário após executar uma comparação por lote via endpoint ainda exposto
+  - leitura de `app/services/dashboard_service.py` e `app/routers/history.py`
 - Saída observada:
-  - `before_batches 1 before_runs 1`
-  - `after_batches 0 after_runs 0`
+  - `dashboard_latest_run_is_none True`
+  - `history_shows_no_comparisons True`
 - Impacto:
-  - excluir um lote remove também os registros importados e todo o histórico de comparação associado
-  - isso contradiz a exigência funcional de manter histórico de importações e execuções de comparação
+  - quando uma comparação por lote é criada, o dashboard e o histórico mensal passam a ocultar esse resultado
+  - o sistema permite gerar uma execução que depois fica invisível nas visões principais, criando inconsistência operacional e de auditoria
 - Por que isso é evidência:
-  - `ImportBatch.imported_aprs` e `ImportBatch.comparison_runs` usam `cascade="all, delete-orphan"`
-  - `delete_import_batch()` faz `db.delete(batch)` e `commit()`
-  - a remoção foi confirmada em execução isolada
+  - o dashboard busca apenas `scope_type == "competencia"`
+  - o histórico de comparações também filtra apenas `scope_type == "competencia"`
+  - a reprodução isolada confirmou que um batch run existente não aparece em nenhuma das duas visões
 - Arquivos afetados:
-  - `app/models/entities.py`
-  - `app/services/import_service.py`
-- Reprodução: bem-sucedida
-- Confiança: alta
-
-## RISK-001
-
-- Tipo: `problema_de_qualidade`
-- Método:
-  - inspeção de `app/routers/history.py`, `app/routers/divergences.py`, `app/routers/manual_aprs.py`
-- Observação:
-  - as listagens carregam todos os registros em memória e só depois paginam com `paginate(...)`
-- Impacto:
-  - com crescimento de lotes, comparações e divergências, a latência e o consumo de memória tendem a subir de forma desnecessária
-- Por que isso é evidência:
-  - `list(...)`/`db.scalars(...)` materializam coleções inteiras antes da paginação
-  - a paginação atual é puramente em Python, não no banco
-- Arquivos afetados:
+  - `app/services/dashboard_service.py`
   - `app/routers/history.py`
-  - `app/routers/divergences.py`
-  - `app/routers/manual_aprs.py`
-- Reprodução:
-  - não houve falha funcional imediata na base de teste; trata-se de fragilidade estrutural confirmada por inspeção
+  - `app/routers/comparisons.py`
+- Reprodução: bem-sucedida
 - Confiança: alta
