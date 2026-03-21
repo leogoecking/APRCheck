@@ -27,6 +27,8 @@ from app.routers.history import history_page
 from app.routers.imports import import_batch_delete, import_batch_delete_confirm, import_file, imports_page
 from app.routers.manual_aprs import (
     manual_apr_create,
+    manual_import_batch_delete,
+    manual_import_batch_delete_confirm,
     manual_apr_delete,
     manual_apr_delete_confirm,
     manual_apr_edit,
@@ -169,6 +171,57 @@ def test_manual_apr_csv_import_and_export(app_module):
         db.close()
 
 
+def test_manual_apr_import_batch_can_be_deleted(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        import_response = manual_apr_import_csv(
+            make_request(app_module.app, method="POST", path="/manual-aprs/import-csv"),
+            arquivo=UploadFile(
+                filename="base-manual.csv",
+                file=BytesIO(
+                    b"apr_id,data_abertura,assunto,colaborador\nAPR-401,2026-03-11,ASSUNTO A,Ana\nAPR-402,2026-03-12,ASSUNTO B,Bia\n"
+                ),
+            ),
+            db=db,
+        )
+        assert import_response.status_code == 303
+
+        list_response = manual_apr_list(
+            make_request(app_module.app, path="/manual-aprs"),
+            db=db,
+        )
+        list_body = list_response.body.decode()
+        assert "Importações manuais" in list_body
+        assert "base-manual.csv" in list_body
+
+        confirm_page = manual_import_batch_delete_confirm(
+            make_request(app_module.app, path="/manual-aprs/import-batches/1/delete"),
+            batch_id=1,
+            db=db,
+        )
+        assert confirm_page.status_code == 200
+        assert "Digite o ID da importação manual para confirmar" in confirm_page.body.decode()
+
+        invalid_delete = manual_import_batch_delete(
+            make_request(app_module.app, method="POST", path="/manual-aprs/import-batches/1/delete"),
+            batch_id=1,
+            confirm_batch_id="999",
+            db=db,
+        )
+        assert invalid_delete.status_code == 400
+
+        valid_delete = manual_import_batch_delete(
+            make_request(app_module.app, method="POST", path="/manual-aprs/import-batches/1/delete"),
+            batch_id=1,
+            confirm_batch_id="1",
+            db=db,
+        )
+        assert valid_delete.status_code == 303
+        assert db.query(ManualAPR).count() == 0
+    finally:
+        db.close()
+
+
 def test_manual_apr_delete_requires_confirmation_and_reruns_comparison(app_module):
     db = app_module.db_module.SessionLocal()
     try:
@@ -235,6 +288,41 @@ def test_manual_apr_delete_requires_confirmation_and_reruns_comparison(app_modul
         assert runs[-1].total_conciliado == 0
         assert runs[-1].total_faltando_manual == 1
         assert "apr_id=APR-55" in (delete_audit.detalhe or "")
+    finally:
+        db.close()
+
+
+def test_history_hides_soft_deleted_import_batches(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        import_response = import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-77,Teste\n"),
+            ),
+            db=db,
+        )
+        assert import_response.status_code == 303
+
+        delete_response = import_batch_delete(
+            make_request(app_module.app, method="POST", path="/imports/1/delete"),
+            batch_id=1,
+            confirm_batch_id="1",
+            db=db,
+        )
+        assert delete_response.status_code == 303
+
+        page = history_page(
+            make_request(app_module.app, path="/history"),
+            db=db,
+        )
+        body = page.body.decode()
+        assert page.status_code == 200
+        assert "lote.csv" not in body
+        assert "#1" not in body
+        assert "Nenhuma importação registrada." in body
     finally:
         db.close()
 
@@ -316,6 +404,7 @@ def test_import_run_comparison_and_export(app_module):
         )
         assert response.status_code == 303
         assert "batch_id=1" in response.headers["location"]
+        assert "competencia=2026-03" in response.headers["location"]
 
         blocked_comparison = execute_comparison(
             make_request(app_module.app, method="POST", path="/comparisons/run/1"),
@@ -469,6 +558,78 @@ def test_divergences_prioritize_apr_id_and_month_view(app_module):
         assert export.status_code == 200
         assert "text/csv" in export.headers["content-type"]
         assert "divergencias.csv" in export.headers["content-disposition"]
+    finally:
+        db.close()
+
+
+def test_imports_page_recognizes_month_with_multiple_batches(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        for filename, competencia in (
+            ("lote-a.csv", "2026-03"),
+            ("lote-b.csv", "2026-03"),
+            ("lote-c.csv", "2026-04"),
+        ):
+            apr_id = {
+                "lote-a.csv": "APR-1",
+                "lote-b.csv": "APR-2",
+                "lote-c.csv": "APR-3",
+            }[filename]
+            response = import_file(
+                make_request(app_module.app, method="POST", path="/imports"),
+                competencia=competencia,
+                arquivo=UploadFile(
+                    filename=filename,
+                    file=BytesIO(f"apr_id,descricao\n{apr_id},Teste\n".encode()),
+                ),
+                db=db,
+            )
+            assert response.status_code == 303
+
+        page = imports_page(
+            make_request(app_module.app, path="/imports"),
+            competencia="2026-03",
+            db=db,
+        )
+        body = page.body.decode()
+        assert page.status_code == 200
+        assert "Meses importados" in body
+        assert "Resumo do mês 2026-03" in body
+        assert "2 importação(ões) reconhecida(s) nesta competência." in body
+        assert "lote-a.csv" in body
+        assert "lote-b.csv" in body
+        assert "lote-c.csv" not in body
+        assert "Conciliar mês" in body
+    finally:
+        db.close()
+
+
+def test_import_file_rejects_duplicate_only_reimport_for_same_month(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        first_response = import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote-a.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-500,Primeiro\n"),
+            ),
+            db=db,
+        )
+        assert first_response.status_code == 303
+
+        duplicate_response = import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote-b.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-500,Duplicado\n"),
+            ),
+            db=db,
+        )
+        body = duplicate_response.body.decode()
+        assert duplicate_response.status_code == 400
+        assert "já foram importados em lotes ativos da competência" in body
     finally:
         db.close()
 
@@ -759,7 +920,7 @@ def test_execute_comparison_by_competencia_creates_consolidated_run(app_module):
         run = db.query(ComparisonRun).filter(ComparisonRun.id == 1).one()
         assert run.scope_type == "competencia"
         assert run.total_conciliado == 1
-        assert run.total_faltando_manual == 1
+        assert run.total_faltando_manual == 2
         assert run.total_duplicados == 1
     finally:
         db.close()
@@ -803,5 +964,64 @@ def test_legacy_batch_runs_are_backfilled_into_monthly_views(app_module):
         assert db.query(ComparisonRun).filter_by(scope_type="competencia").count() == 1
         assert "2026-03" in dashboard_response.body.decode()
         assert "Nenhuma comparação registrada." not in history_response.body.decode()
+    finally:
+        db.close()
+
+
+def test_dashboard_counts_only_active_valid_imported_aprs(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        manual_apr_create(
+            make_request(app_module.app, method="POST", path="/manual-aprs"),
+            apr_id="APR-1",
+            data_referencia="2026-03-01",
+            responsavel="Equipe",
+            descricao=None,
+            observacao=None,
+            status_apr="ativo",
+            db=db,
+        )
+
+        import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote-a.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-1,Conciliado\nAPR-2,Novo\nAPR-2,Duplicado interno\n"),
+            ),
+            db=db,
+        )
+        import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-03",
+            arquivo=UploadFile(
+                filename="lote-b.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-2,Duplicado em outro lote\nAPR-3,Novo\n"),
+            ),
+            db=db,
+        )
+        import_file(
+            make_request(app_module.app, method="POST", path="/imports"),
+            competencia="2026-04",
+            arquivo=UploadFile(
+                filename="lote-c.csv",
+                file=BytesIO(b"apr_id,descricao\nAPR-9,Outro mes\n"),
+            ),
+            db=db,
+        )
+        import_batch_delete(
+            make_request(app_module.app, method="POST", path="/imports/3/delete"),
+            batch_id=3,
+            confirm_batch_id="3",
+            db=db,
+        )
+
+        dashboard_response = dashboard(make_request(app_module.app, method="GET", path="/"), db=db)
+        body = dashboard_response.body.decode()
+
+        assert dashboard_response.status_code == 200
+        assert "<span class=\"label\">APRs importadas</span><strong>2</strong>" in body
+        assert "<span class=\"label\">Importações</span><strong>2</strong>" in body
+        assert "<span class=\"label\">Duplicidades</span><strong>3</strong>" in body
     finally:
         db.close()

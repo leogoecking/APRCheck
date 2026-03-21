@@ -10,10 +10,27 @@ from app.services.comparison_service import ensure_latest_competencia_runs
 def get_dashboard_summary(db: Session) -> dict[str, object]:
     ensure_latest_competencia_runs(db, competencia=None)
     total_manual = db.scalar(select(func.count()).select_from(ManualAPR)) or 0
-    total_imported = db.scalar(select(func.count()).select_from(ImportedAPR)) or 0
-    total_batches = db.scalar(select(func.count()).select_from(ImportBatch)) or 0
+    total_imported = db.scalar(
+        select(func.count())
+        .select_from(ImportedAPR)
+        .join(ImportBatch, ImportedAPR.batch_id == ImportBatch.id)
+        .where(
+            ImportBatch.deleted_at.is_(None),
+            ImportedAPR.is_valid.is_(True),
+            ImportedAPR.is_duplicate.is_(False),
+        )
+    ) or 0
+    total_batches = db.scalar(
+        select(func.count()).select_from(ImportBatch).where(ImportBatch.deleted_at.is_(None))
+    ) or 0
     total_duplicates = db.scalar(
-        select(func.count()).select_from(ImportedAPR).where(ImportedAPR.is_duplicate.is_(True))
+        select(func.count())
+        .select_from(ImportedAPR)
+        .join(ImportBatch, ImportedAPR.batch_id == ImportBatch.id)
+        .where(
+            ImportBatch.deleted_at.is_(None),
+            ImportedAPR.is_duplicate.is_(True),
+        )
     ) or 0
     latest_run = db.scalar(
         select(ComparisonRun)

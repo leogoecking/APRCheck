@@ -13,7 +13,12 @@ from app.services.comparison_service import (
     run_batch_comparison,
     run_competencia_comparison,
 )
-from app.services.import_service import create_import_batch, parse_csv_bytes, parse_xml_bytes
+from app.services.import_service import (
+    ImportValidationError,
+    create_import_batch,
+    parse_csv_bytes,
+    parse_xml_bytes,
+)
 from app.services.manual_apr_service import (
     classify_manual_reference_month,
     create_manual_apr,
@@ -63,6 +68,17 @@ def test_parse_csv_accepts_tab_delimited_id_header():
     assert rows[0].is_valid is True
     assert rows[1].apr_id == "238470"
     assert rows[1].is_valid is True
+
+
+def test_parse_csv_normalizes_excel_formula_wrapped_id():
+    rows = parse_csv_bytes(
+        b'apr_id,descricao\n="235269",Teste\n'
+    )
+
+    assert len(rows) == 1
+    assert rows[0].apr_id == "235269"
+    assert rows[0].payload["apr_id"] == "235269"
+    assert rows[0].is_valid is True
 
 
 def test_parse_csv_matches_real_mes03_sample_fixture():
@@ -376,11 +392,107 @@ def test_competencia_comparison_combines_batches_and_detects_cross_batch_duplica
         assert result.scope_type == "competencia"
         assert result.scope_value == "2026-03"
         assert result.total_manual == 2
-        assert result.total_importado == 2
+        assert result.total_importado == 3
         assert result.total_conciliado == 1
-        assert result.total_faltando_manual == 1
+        assert result.total_faltando_manual == 2
         assert result.total_faltando_importado == 1
         assert result.total_duplicados == 1
+    finally:
+        db.close()
+
+
+def test_create_import_batch_marks_duplicate_ids_from_active_month_batches(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote-a.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-100,Primeiro\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        batch = create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote-b.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-100,Duplicado\nAPR-200,Novo\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        rows = batch.imported_aprs
+        assert batch.total_registros == 2
+        assert batch.total_validos == 1
+        assert batch.total_duplicados == 1
+        assert rows[0].apr_id == "APR-100"
+        assert rows[0].is_valid is False
+        assert rows[0].is_duplicate is True
+        assert "outro lote ativo" in (rows[0].error_message or "")
+        assert rows[1].apr_id == "APR-200"
+        assert rows[1].is_valid is True
+    finally:
+        db.close()
+
+
+def test_create_import_batch_rejects_reimport_with_no_new_ids(app_module):
+    db = app_module.db_module.SessionLocal()
+    try:
+        create_import_batch(
+            db,
+            type(
+                "UploadStub",
+                (),
+                {
+                    "filename": "lote-a.csv",
+                    "file": type(
+                        "FileStub",
+                        (),
+                        {"read": lambda self: b"apr_id,descricao\nAPR-100,Primeiro\n"},
+                    )(),
+                },
+            )(),
+            ImportBatchInput(competencia="2026-03"),
+        )
+
+        try:
+            create_import_batch(
+                db,
+                type(
+                    "UploadStub",
+                    (),
+                    {
+                        "filename": "lote-b.csv",
+                        "file": type(
+                            "FileStub",
+                            (),
+                            {"read": lambda self: b"apr_id,descricao\nAPR-100,Duplicado\n"},
+                        )(),
+                    },
+                )(),
+                ImportBatchInput(competencia="2026-03"),
+            )
+            raise AssertionError("Era esperado ImportValidationError para reimportação sem IDs novos.")
+        except ImportValidationError as exc:
+            assert "já foram importados" in str(exc)
+
     finally:
         db.close()
 

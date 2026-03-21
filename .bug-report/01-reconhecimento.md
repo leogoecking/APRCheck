@@ -2,20 +2,20 @@
 
 ## Stack detectada
 
-- Linguagem principal: Python 3.11.2 no `.venv`
+- Linguagem principal: Python 3.11.2
 - Framework web: FastAPI
 - Templates: Jinja2
 - ORM/acesso a dados: SQLAlchemy 2.x
 - Banco: SQLite
 - Servidor local: Uvicorn
 - Test runner: pytest 8.4.2
-- Dependências adicionais observadas: `python-multipart`, `httpx`, `openpyxl`
+- Dependências relevantes observadas: `itsdangerous`, `python-multipart`, `httpx`, `openpyxl`
 
 ## Comandos relevantes descobertos
 
-- Instalar dependências: `pip install -r requirements.txt`
-- Inicializar banco: `python scripts/init_db.py`
-- Subir aplicação: `./run.sh`
+- Instalação de dependências: `pip install -r requirements.txt`
+- Inicialização do banco: `python scripts/init_db.py`
+- Subida local: `./run.sh`
 - Testes: `.venv/bin/pytest`
 
 ## Ferramentas verificadas no ambiente
@@ -23,45 +23,47 @@
 - `python3`: disponível
 - `.venv/bin/python`: disponível
 - `.venv/bin/pip`: disponível
-- `sqlite3`: disponível
-- `pytest`: disponível via `.venv/bin/pytest`
+- `.venv/bin/pytest`: disponível
 - `git`: disponível
+- `find`: disponível
+- `sed`: disponível
+- `sqlite3`: não verificado nesta rodada
 - `rg`: indisponível no ambiente atual
 
 ## Estrutura principal e entrypoints
 
-- Entrypoint da aplicação: `app/main.py`
+- Entrypoint principal: `app/main.py`
 - Configuração: `app/config.py`
-- Banco e sessão: `app/db.py`
+- Banco/sessão/migração compatível: `app/db.py`
 - Modelos: `app/models/entities.py`
-- Rotas web: `app/routers/*.py`
-- Lógica de importação: `app/services/import_service.py`
-- Lógica de conciliação: `app/services/comparison_service.py`
-- Lógica manual/auditoria: `app/services/manual_apr_service.py`, `app/services/manual_audit_service.py`
+- Rotas HTTP: `app/routers/*.py`
+- Serviços críticos:
+  - importação: `app/services/import_service.py`
+  - conciliação: `app/services/comparison_service.py`
+  - cadastro manual/auditoria: `app/services/manual_apr_service.py`, `app/services/manual_audit_service.py`
 - Templates: `app/templates/`
-- Script operacional local: `run.sh`
-- Unidade de serviço: `apr-conciliador.service`
+- Script operacional: `run.sh`
 - Testes: `tests/test_import_and_comparison.py`, `tests/test_routes.py`
 
-## Comportamento funcional observado
+## Comandos e evidências executados
 
-- A conciliação usa conjuntos de `apr_id` e ignora outros campos na regra principal.
-- O cadastro manual tem `apr_id` único em banco.
-- Importação CSV/XML detecta `apr_id` ausente e duplicidade no lote.
-- Há histórico persistido para importações, comparações e auditoria manual.
-- Há exclusão de APR manual e exclusão de lote importado.
+- `python3 --version`
+- `.venv/bin/python --version`
+- `.venv/bin/pytest --version`
+- `.venv/bin/pytest -q`
+- inspeção com `sed` dos arquivos centrais de configuração, rotas, serviços, modelos e templates
+- reprodução isolada em banco temporário sob `/tmp/aprcheck-analysis-history`
 
 ## Mapa inicial de risco
 
-- Upload e parsing de arquivo: `app/services/import_service.py`
-- Escritas em banco e integridade de histórico: `app/services/import_service.py`, `app/models/entities.py`
-- Regra central de conciliação por competência/ID: `app/services/comparison_service.py`
-- UX de formulários e redirects: `app/routers/*.py`, `app/utils/web.py`, `app/templates/base.html`
-- Deploy/startup local: `run.sh`, `apr-conciliador.service`
+- Upload e parsing de arquivos: `app/services/import_service.py`
+- Escritas e exclusão lógica em banco: `app/services/import_service.py`, `app/services/manual_apr_service.py`
+- Reexecução automática de comparações mensais: `app/services/comparison_service.py`
+- Histórico e rastreabilidade operacional: `app/routers/history.py`, `app/templates/history/index.html`
+- Configuração sensível e sessão web: `app/config.py`, `app/main.py`, `app/utils/web.py`
 
 ## Limitações encontradas
 
-- `rg` não está instalado, então a inspeção textual foi feita com `find`, `sed` e `nl`.
-- O ambiente virtual atual estava inconsistente com o código: `itsdangerous` não estava instalado, apesar de a aplicação depender de `SessionMiddleware`.
-- Não há suíte end-to-end/browser; os testes cobrem bem serviços e rotas, mas não validam fluxos reais de sessão/flash no navegador.
-- O repositório já contém `data/app.db`, então reproduções isoladas foram feitas com bancos temporários em `/tmp` para evitar interferência.
+- `rg` não está instalado; a inspeção textual foi feita com `find`, `sed` e `nl`.
+- Não há suíte E2E/browser; a validação de UI foi feita por inspeção de template e chamadas diretas de rotas.
+- A análise de segurança ficou restrita ao contexto local do repositório; não houve validação de exposição real em rede além do comportamento padrão documentado no `README.md`.

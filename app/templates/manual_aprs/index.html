@@ -63,6 +63,43 @@
     <section class="card">
         <div class="section-header">
             <div>
+                <h2>Importações manuais</h2>
+                <p class="muted">Lotes gerados pela importação de arquivo da base manual.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Arquivo</th>
+                        <th>Criadas</th>
+                        <th>Ignoradas</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in manual_import_batches %}
+                    <tr>
+                        <td>#{{ batch.id }}</td>
+                        <td>{{ batch.nome_arquivo }}</td>
+                        <td>{{ batch.total_criadas }}</td>
+                        <td>{{ batch.total_ignoradas }}</td>
+                        <td class="actions">
+                            <a href="/manual-aprs/import-batches/{{ batch.id }}/delete">Excluir importação</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="muted">Nenhuma importação manual registrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <div>
                 <h2>Base manual de APRs</h2>
                 <p class="muted">Lista operacional com foco nas comparações mensais.</p>
             </div>

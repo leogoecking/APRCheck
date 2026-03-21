@@ -95,6 +95,33 @@ def _apply_sqlite_compat_migrations() -> None:
                 )
             )
 
+        table_names = inspector.get_table_names()
+        if "manual_apr_import_batches" not in table_names:
+            connection.execute(
+                text(
+                    "CREATE TABLE manual_apr_import_batches ("
+                    "id INTEGER NOT NULL PRIMARY KEY, "
+                    "nome_arquivo VARCHAR(255) NOT NULL, "
+                    "tipo_arquivo VARCHAR(20) NOT NULL, "
+                    "total_criadas INTEGER NOT NULL DEFAULT 0, "
+                    "total_ignoradas INTEGER NOT NULL DEFAULT 0, "
+                    "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                )
+            )
+
+        manual_apr_columns = {column["name"] for column in inspector.get_columns("manual_aprs")}
+        if "manual_import_batch_id" not in manual_apr_columns:
+            connection.execute(
+                text("ALTER TABLE manual_aprs ADD COLUMN manual_import_batch_id INTEGER")
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_manual_aprs_manual_import_batch_id "
+                    "ON manual_aprs (manual_import_batch_id)"
+                )
+            )
+
         _normalize_competencia_columns(connection, inspector)
 
 

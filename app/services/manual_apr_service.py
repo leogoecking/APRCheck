@@ -8,9 +8,9 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models.entities import ManualAPR
+from app.models.entities import ManualAPR, ManualAPRImportBatch
 from app.schemas.forms import ManualAPRInput
 from app.services.apr_utils import (
     detect_subject_key,
@@ -19,6 +19,7 @@ from app.services.apr_utils import (
     normalize_open_date,
 )
 from app.services.manual_audit_service import (
+    build_bulk_delete_summary,
     build_bulk_import_summary,
     build_manual_apr_summary,
     create_manual_audit_log,
@@ -73,6 +74,24 @@ def list_manual_aprs(
 
 def get_manual_apr(db: Session, apr_db_id: int) -> ManualAPR | None:
     return db.get(ManualAPR, apr_db_id)
+
+
+def list_manual_import_batches(db: Session) -> list[ManualAPRImportBatch]:
+    return list(
+        db.scalars(
+            select(ManualAPRImportBatch)
+            .options(selectinload(ManualAPRImportBatch.manual_aprs))
+            .order_by(ManualAPRImportBatch.created_at.desc(), ManualAPRImportBatch.id.desc())
+        )
+    )
+
+
+def get_manual_import_batch(db: Session, batch_id: int) -> ManualAPRImportBatch | None:
+    return db.scalar(
+        select(ManualAPRImportBatch)
+        .options(selectinload(ManualAPRImportBatch.manual_aprs))
+        .where(ManualAPRImportBatch.id == batch_id)
+    )
 
 
 def create_manual_apr(db: Session, payload: ManualAPRInput) -> ManualAPR:
@@ -158,6 +177,16 @@ def import_manual_aprs_from_text(db: Session, raw_text: str) -> ManualImportResu
             competencias_afetadas.add(payload.data_referencia.strftime("%Y-%m"))
 
     if to_create:
+        batch = ManualAPRImportBatch(
+            nome_arquivo="importacao_manual.txt",
+            tipo_arquivo="txt",
+            total_criadas=len(to_create),
+            total_ignoradas=len(errors),
+        )
+        db.add(batch)
+        db.flush()
+        for item in to_create:
+            item.manual_import_batch_id = batch.id
         db.add_all(to_create)
         try:
             db.commit()
@@ -191,7 +220,45 @@ def import_manual_aprs_from_csv_bytes(db: Session, filename: str, raw_data: byte
     if extension not in {".csv", ".tsv", ".txt"}:
         raise ValueError("Envie um arquivo CSV, TSV ou TXT para a base manual.")
     text = _decode_manual_text(raw_data)
-    return import_manual_aprs_from_text(db, text)
+    result = import_manual_aprs_from_text(db, text)
+    if result.created_count:
+        latest_batch = db.scalar(
+            select(ManualAPRImportBatch).order_by(ManualAPRImportBatch.id.desc())
+        )
+        if latest_batch is not None:
+            latest_batch.nome_arquivo = filename
+            latest_batch.tipo_arquivo = extension.lstrip(".")
+            db.commit()
+    return result
+
+
+def delete_manual_import_batch(
+    db: Session,
+    batch: ManualAPRImportBatch,
+) -> set[str]:
+    competencias_afetadas = {
+        item.data_referencia.strftime("%Y-%m")
+        for item in batch.manual_aprs
+        if item.data_referencia is not None
+    }
+    deleted_count = len(batch.manual_aprs)
+    db.add(
+        create_manual_audit_log(
+            action="bulk_delete",
+            apr_id=f"{deleted_count}_itens",
+            manual_apr_id=None,
+            competencia=",".join(sorted(competencias_afetadas)) or None,
+            detalhe=build_bulk_delete_summary(
+                deleted_count=deleted_count,
+                filename=batch.nome_arquivo,
+            ),
+        )
+    )
+    for item in list(batch.manual_aprs):
+        db.delete(item)
+    db.delete(batch)
+    db.commit()
+    return competencias_afetadas
 
 
 def export_manual_aprs_csv_rows(items: list[ManualAPR]) -> list[list[str]]:

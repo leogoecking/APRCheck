@@ -19,6 +19,11 @@ class ManualAPR(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     apr_id: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
+    manual_import_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("manual_apr_import_batches.id"),
+        nullable=True,
+        index=True,
+    )
     data_referencia: Mapped[date | None] = mapped_column(Date, nullable=True)
     responsavel: Mapped[str | None] = mapped_column(String(255), nullable=True)
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -29,6 +34,23 @@ class ManualAPR(TimestampMixin, Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+    manual_import_batch: Mapped["ManualAPRImportBatch | None"] = relationship(
+        back_populates="manual_aprs"
+    )
+
+
+class ManualAPRImportBatch(TimestampMixin, Base):
+    __tablename__ = "manual_apr_import_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nome_arquivo: Mapped[str] = mapped_column(String(255), nullable=False)
+    tipo_arquivo: Mapped[str] = mapped_column(String(20), nullable=False)
+    total_criadas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_ignoradas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    manual_aprs: Mapped[list["ManualAPR"]] = relationship(
+        back_populates="manual_import_batch",
     )
 
 

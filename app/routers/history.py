@@ -59,6 +59,7 @@ def history_page(
         db.scalars(
             select(ImportBatch)
             .options(selectinload(ImportBatch.comparison_runs))
+            .where(ImportBatch.deleted_at.is_(None))
             .order_by(
                 import_order_map[import_sort].asc() if import_direction == "asc" else import_order_map[import_sort].desc(),
                 ImportBatch.id.desc(),

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.entities import ImportBatch, ImportedAPR
@@ -42,6 +43,13 @@ def create_import_batch(db: Session, upload: UploadFile, payload: ImportBatchInp
         parsed_rows = parse_csv_bytes(raw_data)
     else:
         parsed_rows = parse_xml_bytes(raw_data)
+
+    existing_ids = _load_existing_imported_ids(db, payload.competencia)
+    parsed_rows = _mark_existing_competencia_duplicates(parsed_rows, existing_ids)
+    if not any(row.is_valid for row in parsed_rows):
+        raise ImportValidationError(
+            "Todos os apr_id válidos do arquivo já foram importados em lotes ativos da competência informada."
+        )
 
     batch = ImportBatch(
         nome_arquivo=filename,
@@ -157,6 +165,32 @@ def _mark_duplicate_rows(rows: list[ParsedImportRow]) -> list[ParsedImportRow]:
             row.is_valid = False
             row.is_duplicate = True
             row.error_message = "apr_id duplicado dentro do mesmo lote."
+    return rows
+
+
+def _load_existing_imported_ids(db: Session, competencia: str) -> set[str]:
+    return set(
+        db.scalars(
+            select(ImportedAPR.apr_id)
+            .join(ImportBatch, ImportedAPR.batch_id == ImportBatch.id)
+            .where(
+                ImportBatch.deleted_at.is_(None),
+                ImportBatch.competencia == competencia,
+                ImportedAPR.apr_id.is_not(None),
+            )
+        )
+    )
+
+
+def _mark_existing_competencia_duplicates(
+    rows: list[ParsedImportRow],
+    existing_ids: set[str],
+) -> list[ParsedImportRow]:
+    for row in rows:
+        if row.is_valid and row.apr_id and row.apr_id in existing_ids:
+            row.is_valid = False
+            row.is_duplicate = True
+            row.error_message = "apr_id já importado em outro lote ativo da mesma competência."
     return rows
 
 

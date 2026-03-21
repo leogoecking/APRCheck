@@ -2,42 +2,46 @@
 
 ## Executive summary
 
-Foi confirmada uma falha de inicializacao da aplicacao: `app.main` quebrava com `ModuleNotFoundError: No module named 'itsdangerous'`. A causa raiz era um desalinhamento entre o codigo e o manifesto de dependencias: `SessionMiddleware` estava em uso, mas `requirements.txt` nao declarava `itsdangerous`.
+Foi corrigido o `BUG-007`, que fazia a página de histórico continuar exibindo lotes excluídos logicamente. A correção foi mínima: o histórico agora ignora `ImportBatch` com `deleted_at` preenchido, e um teste de regressão foi adicionado para garantir o fluxo. O `RISK-001` permanece pendente por envolver endurecimento de configuração de deploy.
 
 ## Findings by category
 
 - `bug_reproduzivel`
-  - `BUG-006`: dependencia obrigatoria ausente no manifesto, impedindo a inicializacao da aplicacao.
+  - `BUG-007`: lotes com `deleted_at` definido continuam visíveis em `/history`.
+- `risco_potencial`
+  - `RISK-001`: `APP_SECRET_KEY` opcional com fallback previsível (`apr-conciliador-dev-key`).
 
 ## Fixes applied
 
-- Adicionado `itsdangerous>=2.2,<3.0` em `requirements.txt`.
-- Registrado o achado, a priorizacao e a correcao em `.bug-report`.
+- Corrigido o `BUG-007` em `app/routers/history.py` com filtro por `deleted_at IS NULL`.
+- Adicionado teste de regressão em `tests/test_routes.py`.
+- Registrada a correção em `.bug-report/correcoes/BUG-007.md`.
 
 ## Pending items and why they were not fixed
 
-- Nenhum item adicional foi alterado nesta rodada.
-- Achados anteriores (`BUG-004` e `BUG-005`) foram mantidos apenas como contexto historico; nao fizeram parte desta correcao pontual.
+- `RISK-001`
+  - não foi corrigido porque mexe em bootstrap/configuração de deploy
+  - endurecer essa regra sem alinhar ambiente e documentação pode quebrar instalações locais existentes
 
 ## Validation performed
 
-- `./.venv/bin/pip install -r requirements.txt`
-  - `itsdangerous-2.2.0` instalado com sucesso.
-- `./.venv/bin/python -c "import app.main; print('app_import_ok')"`
-  - import concluido com sucesso.
-- `./.venv/bin/pytest tests/test_routes.py`
-  - `13 passed in 18.46s`
+- `.venv/bin/pytest -q tests/test_routes.py`
+  - resultado: `15 passed in 18.24s`
+- reprodução do fluxo coberta por teste de regressão
+  - resultado esperado validado: lote excluído logicamente não aparece mais em `/history`
+- leitura efetiva de `settings.secret_key`
+  - resultado: fallback previsível confirmado
 
 ## Known limitations of the analysis
 
-- A validacao foi focada no problema de startup e na suite de rotas, nao na suite completa do repositorio.
-- A instalacao da dependencia exigiu acesso de rede para o `pip`; sem isso, o ambiente continuaria inconsistente mesmo com o manifesto corrigido.
+- A verificação de segurança foi estática e local; não houve ambiente remoto exposto para validar exploração real.
+- Não há testes E2E de navegador cobrindo o histórico após exclusão lógica.
+- A análise se concentrou nas áreas de maior risco funcional e de configuração; não foi feita revisão linha a linha de todo o repositório.
 
 ## Practical recommendations
 
-- Sempre recriar ou sincronizar o `.venv` a partir de `requirements.txt` apos mudar middlewares ou dependencias indiretas do framework.
-- Em CI, adicionar uma etapa minima de `python -c "import app.main"` para detectar falhas de startup por dependencia ausente.
+- Exigir `APP_SECRET_KEY` fora de modo explicitamente local/desenvolvimento.
 
 ## Residual risks
 
-- Ambientes ja provisionados sem atualizar dependencias continuarao falhando ate executar `pip install -r requirements.txt`.
+- Se a aplicação for exposta com a chave padrão, a integridade da sessão web depende de um segredo publicamente previsível.

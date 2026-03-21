@@ -2,77 +2,112 @@
 
 ## Contexto desta rodada
 
-- Inspeção adicional focada em inicialização da aplicação e dependências declaradas.
-- Comandos executados nesta rodada:
-  - `./.venv/bin/python -c "import itsdangerous; print(itsdangerous.__version__)"`
-  - `./.venv/bin/python -c "import app.main"`
-  - inspeção de `requirements.txt` e `app/main.py`
+- Objetivo: analisar o código com base no fluxo exigido em `AGENTS.md`, sem assumir bugs sem evidência.
+- Validação ampla executada: `.venv/bin/pytest -q`
+- Resultado da suíte: `34 passed in 30.30s`
+- Conclusão parcial: a suíte atual está verde, então os achados desta rodada vieram de inspeção dirigida e reprodução isolada.
 
-## BUG-006
-
-- Tipo: `bug_reproduzivel`
-- Método:
-  - inspeção de `app/main.py`
-  - inspeção de `requirements.txt`
-  - reprodução por import direto do módulo
-- Saída observada:
-  - `ModuleNotFoundError: No module named 'itsdangerous'`
-  - a falha ocorre ao importar `starlette.middleware.sessions.SessionMiddleware`
-  - `requirements.txt` não declara `itsdangerous`
-- Impacto:
-  - a aplicação não sobe porque `app.main` falha durante o import
-  - qualquer fluxo que dependa de `run.sh`, `uvicorn` ou dos testes de rotas fica bloqueado se o ambiente for recriado a partir do manifesto atual
-- Por que isso é evidência:
-  - `app/main.py` importa `SessionMiddleware` explicitamente
-  - a implementação de `starlette.middleware.sessions` importa `itsdangerous`
-  - a dependência não está no manifesto do projeto, então um ambiente criado com `pip install -r requirements.txt` pode ficar incompleto para o código atual
-- Arquivos afetados:
-  - `requirements.txt`
-  - `app/main.py`
-- Reprodução: bem-sucedida
-- Confiança: alta
-
-## BUG-004
+## BUG-007
 
 - Tipo: `bug_reproduzivel`
 - Método:
-  - inspeção de `app/routers/comparisons.py`
-  - reprodução em banco temporário com chamada direta de `POST /comparisons/run/{batch_id}`
-- Saída observada:
-  - `status 303`
-  - `scope_type batch`
-  - `scope_value 1`
-- Impacto:
-  - o sistema continua aceitando comparação por lote mesmo após a regra operacional ter sido migrada para comparação mensal
-  - isso permite gerar novas execuções fora do fluxo que a interface agora comunica ao usuário
-- Por que isso é evidência:
-  - o endpoint `/comparisons/run/{batch_id}` continua registrado e operacional
-  - a execução produz `ComparisonRun.scope_type == "batch"` em ambiente isolado
-- Arquivos afetados:
-  - `app/routers/comparisons.py`
-  - `app/services/comparison_service.py`
-- Reprodução: bem-sucedida
-- Confiança: alta
+  - inspeção de `app/routers/history.py`
+  - inspeção de `app/templates/history/index.html`
+  - reprodução em banco temporário via chamada direta das rotas `import_file`, `import_batch_delete` e `history_page`
+- Comando/reprodução:
 
-## BUG-005
+```bash
+mkdir -p /tmp/aprcheck-analysis-history && .venv/bin/python - <<'PY'
+from io import BytesIO
+from pathlib import Path
+from _pytest.monkeypatch import MonkeyPatch
+from starlette.datastructures import UploadFile
 
-- Tipo: `bug_reproduzivel`
-- Método:
-  - reprodução em banco temporário após executar uma comparação por lote via endpoint ainda exposto
-  - leitura de `app/services/dashboard_service.py` e `app/routers/history.py`
+from app.routers.history import history_page
+from app.routers.imports import import_batch_delete, import_file
+from tests.conftest import app_module as fixture_func
+from tests.test_routes import make_request
+
+mp = MonkeyPatch()
+ctx = fixture_func.__wrapped__(Path('/tmp/aprcheck-analysis-history'), mp)
+db = ctx.db_module.SessionLocal()
+try:
+    resp = import_file(
+        make_request(ctx.app, method='POST', path='/imports'),
+        competencia='2026-03',
+        arquivo=UploadFile(filename='lote.csv', file=BytesIO(b'apr_id,descricao\nAPR-1,Teste\n')),
+        db=db,
+    )
+    print('import_status', resp.status_code)
+    delete_resp = import_batch_delete(
+        make_request(ctx.app, method='POST', path='/imports/1/delete'),
+        batch_id=1,
+        confirm_batch_id='1',
+        db=db,
+    )
+    print('delete_status', delete_resp.status_code)
+    page = history_page(make_request(ctx.app, path='/history'), db=db)
+    body = page.body.decode()
+    print('history_status', page.status_code)
+    print('contains_batch_1', '#1' in body)
+    print('contains_file', 'lote.csv' in body)
+    print('contains_empty_msg', 'Nenhuma importação registrada.' in body)
+finally:
+    db.close()
+    mp.undo()
+PY
+```
+
 - Saída observada:
-  - `dashboard_latest_run_is_none True`
-  - `history_shows_no_comparisons True`
+  - `import_status 303`
+  - `delete_status 303`
+  - `history_status 200`
+  - `contains_batch_1 True`
+  - `contains_file True`
+  - `contains_empty_msg False`
 - Impacto:
-  - quando uma comparação por lote é criada, o dashboard e o histórico mensal passam a ocultar esse resultado
-  - o sistema permite gerar uma execução que depois fica invisível nas visões principais, criando inconsistência operacional e de auditoria
+  - um lote excluído logicamente continua visível na tela de histórico
+  - isso contradiz o fluxo operacional da exclusão lógica, que remove o lote da área operacional e deveria evitar confusão sobre o que ainda está ativo
 - Por que isso é evidência:
-  - o dashboard busca apenas `scope_type == "competencia"`
-  - o histórico de comparações também filtra apenas `scope_type == "competencia"`
-  - a reprodução isolada confirmou que um batch run existente não aparece em nenhuma das duas visões
+  - `history_page()` busca `ImportBatch` sem filtro por `deleted_at`
+  - o template `app/templates/history/index.html` renderiza diretamente a lista `batches`
+  - a reprodução confirmou que o lote continua aparecendo após `delete_import_batch()`
 - Arquivos afetados:
-  - `app/services/dashboard_service.py`
   - `app/routers/history.py`
-  - `app/routers/comparisons.py`
+  - `app/templates/history/index.html`
 - Reprodução: bem-sucedida
 - Confiança: alta
+
+## RISK-001
+
+- Tipo: `risco_potencial`
+- Método:
+  - inspeção de `app/config.py`
+  - leitura do valor efetivo de `settings.secret_key` sem variável de ambiente
+- Comando:
+
+```bash
+.venv/bin/python - <<'PY'
+from app.config import settings
+print('secret_key', settings.secret_key)
+print('uses_default', settings.secret_key == 'apr-conciliador-dev-key')
+PY
+```
+
+- Saída observada:
+  - `secret_key apr-conciliador-dev-key`
+  - `uses_default True`
+- Impacto:
+  - se a aplicação for exposta em rede sem sobrescrever `APP_SECRET_KEY`, a sessão assinada pode ficar previsível
+  - isso pode permitir falsificação de cookie de sessão e mensagens flash, dependendo da superfície exposta
+- Por que isso ainda não é vulnerabilidade confirmada:
+  - o sistema atual não implementa autenticação/autorização
+  - a análise não confirmou exploração prática em um ambiente exposto real
+  - portanto, há evidência de configuração fraca, mas não de impacto explorado no contexto real
+- Arquivos afetados:
+  - `app/config.py`
+  - `app/main.py`
+- Reprodução: parcialmente bem-sucedida
+  - foi confirmada a configuração previsível
+  - não foi confirmada exploração no contexto real
+- Confiança: média

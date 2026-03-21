@@ -16,10 +16,13 @@ from app.services.manual_apr_service import (
     ManualAPRConflictError,
     classify_manual_reference_month,
     create_manual_apr,
+    delete_manual_import_batch,
     delete_manual_apr,
     export_manual_aprs_csv_rows,
     get_manual_apr,
+    get_manual_import_batch,
     import_manual_aprs_from_csv_bytes,
+    list_manual_import_batches,
     list_manual_aprs,
     update_manual_apr,
 )
@@ -34,6 +37,35 @@ def _manual_sort_state(sort: str | None, direction: str | None) -> tuple[str, st
     safe_sort = sort if sort in allowed_sorts else "updated_at"
     safe_direction = "asc" if direction == "asc" else "desc"
     return safe_sort, safe_direction
+
+
+def _build_manual_index_context(
+    request: Request,
+    db: Session,
+    *,
+    pagination: dict[str, object],
+    query: str,
+    sort: str,
+    direction: str,
+    form_data: dict[str, object],
+    form_errors: list[str],
+    flash: object,
+) -> dict[str, object]:
+    return {
+        "request": request,
+        "manual_aprs": pagination["items"],
+        "reference_labels": {
+            item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
+        },
+        "manual_import_batches": list_manual_import_batches(db),
+        "query": query,
+        "sort": sort,
+        "direction": direction,
+        "pagination": pagination,
+        "form_data": form_data,
+        "form_errors": form_errors,
+        "flash": flash,
+    }
 
 
 @router.get("")
@@ -51,21 +83,17 @@ def manual_apr_list(
         page,
         15,
     )
-    reference_labels = {
-        item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
-    }
-    context = {
-        "request": request,
-        "manual_aprs": pagination["items"],
-        "reference_labels": reference_labels,
-        "query": q or "",
-        "sort": safe_sort,
-        "direction": safe_direction,
-        "pagination": pagination,
-        "form_data": {},
-        "form_errors": [],
-        "flash": pop_flash(request),
-    }
+    context = _build_manual_index_context(
+        request,
+        db,
+        pagination=pagination,
+        query=q or "",
+        sort=safe_sort,
+        direction=safe_direction,
+        form_data={},
+        form_errors=[],
+        flash=pop_flash(request),
+    )
     return request.app.state.templates.TemplateResponse(request, "manual_aprs/index.html", context)
 
 
@@ -101,20 +129,17 @@ def manual_apr_create(
     except ManualAPRConflictError as exc:
         safe_sort, safe_direction = _manual_sort_state(None, None)
         pagination = paginate(list_manual_aprs(db, None, sort_by=safe_sort, direction=safe_direction), 1, 15)
-        context = {
-            "request": request,
-            "manual_aprs": pagination["items"],
-            "reference_labels": {
-                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
-            },
-            "query": "",
-            "sort": safe_sort,
-            "direction": safe_direction,
-            "pagination": pagination,
-            "form_data": form_data,
-            "form_errors": [str(exc)],
-            "flash": None,
-        }
+        context = _build_manual_index_context(
+            request,
+            db,
+            pagination=pagination,
+            query="",
+            sort=safe_sort,
+            direction=safe_direction,
+            form_data=form_data,
+            form_errors=[str(exc)],
+            flash=None,
+        )
         return request.app.state.templates.TemplateResponse(
             request,
             "manual_aprs/index.html",
@@ -125,20 +150,17 @@ def manual_apr_create(
         errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
         safe_sort, safe_direction = _manual_sort_state(None, None)
         pagination = paginate(list_manual_aprs(db, None, sort_by=safe_sort, direction=safe_direction), 1, 15)
-        context = {
-            "request": request,
-            "manual_aprs": pagination["items"],
-            "reference_labels": {
-                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
-            },
-            "query": "",
-            "sort": safe_sort,
-            "direction": safe_direction,
-            "pagination": pagination,
-            "form_data": form_data,
-            "form_errors": errors,
-            "flash": None,
-        }
+        context = _build_manual_index_context(
+            request,
+            db,
+            pagination=pagination,
+            query="",
+            sort=safe_sort,
+            direction=safe_direction,
+            form_data=form_data,
+            form_errors=errors,
+            flash=None,
+        )
         return request.app.state.templates.TemplateResponse(
             request,
             "manual_aprs/index.html",
@@ -176,20 +198,17 @@ def manual_apr_import_csv(
         errors = [error["msg"] for error in getattr(exc, "errors", lambda: [])()] or [str(exc)]
         safe_sort, safe_direction = _manual_sort_state(None, None)
         pagination = paginate(list_manual_aprs(db, None, sort_by=safe_sort, direction=safe_direction), 1, 15)
-        context = {
-            "request": request,
-            "manual_aprs": pagination["items"],
-            "reference_labels": {
-                item.id: classify_manual_reference_month(item.data_referencia) for item in pagination["items"]
-            },
-            "query": "",
-            "sort": safe_sort,
-            "direction": safe_direction,
-            "pagination": pagination,
-            "form_data": {},
-            "form_errors": errors,
-            "flash": None,
-        }
+        context = _build_manual_index_context(
+            request,
+            db,
+            pagination=pagination,
+            query="",
+            sort=safe_sort,
+            direction=safe_direction,
+            form_data={},
+            form_errors=errors,
+            flash=None,
+        )
         return request.app.state.templates.TemplateResponse(
             request,
             "manual_aprs/index.html",
@@ -202,6 +221,57 @@ def manual_apr_import_csv(
     if result.skipped_count:
         message += f", {result.skipped_count} ignorada(s)"
     set_flash(request, "success", message + ".")
+    return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/import-batches/{batch_id}/delete")
+def manual_import_batch_delete_confirm(
+    request: Request,
+    batch_id: int,
+    db: Session = Depends(get_db),
+) -> object:
+    batch = get_manual_import_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importação manual não encontrada.")
+    context = {
+        "request": request,
+        "batch": batch,
+        "flash": pop_flash(request),
+    }
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "manual_aprs/delete_import_batch.html",
+        context,
+    )
+
+
+@router.post("/import-batches/{batch_id}/delete")
+def manual_import_batch_delete(
+    request: Request,
+    batch_id: int,
+    confirm_batch_id: str = Form(...),
+    db: Session = Depends(get_db),
+) -> object:
+    batch = get_manual_import_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importação manual não encontrada.")
+    if confirm_batch_id.strip() != str(batch.id):
+        context = {
+            "request": request,
+            "batch": batch,
+            "form_errors": ["Confirmação inválida. Digite exatamente o ID da importação manual."],
+            "flash": None,
+        }
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "manual_aprs/delete_import_batch.html",
+            context,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    affected_competencias = delete_manual_import_batch(db, batch)
+    rerun_latest_comparisons_for_competencias(db, affected_competencias)
+    set_flash(request, "success", "Importação manual excluída com sucesso.")
     return RedirectResponse(url="/manual-aprs", status_code=status.HTTP_303_SEE_OTHER)
 
 

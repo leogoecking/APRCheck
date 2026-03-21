@@ -17,6 +17,10 @@ def build_bulk_import_summary(*, created_count: int, skipped_count: int) -> str:
     return f"criadas={created_count} | ignoradas={skipped_count}"
 
 
+def build_bulk_delete_summary(*, deleted_count: int, filename: str) -> str:
+    return f"arquivo={filename} | excluidas={deleted_count}"
+
+
 def create_manual_audit_log(
     *,
     action: str,

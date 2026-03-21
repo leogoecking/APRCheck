@@ -57,6 +57,15 @@ def normalize_apr_id(value: object) -> str | None:
     if value is None:
         return None
     cleaned = str(value).strip()
+    if (
+        len(cleaned) >= 3
+        and cleaned[0] == "="
+        and cleaned[1] in {'"', "'"}
+        and cleaned[-1] == cleaned[1]
+    ):
+        cleaned = cleaned[2:-1].strip()
+    elif len(cleaned) >= 2 and cleaned[0] in {'"', "'"} and cleaned[-1] == cleaned[0]:
+        cleaned = cleaned[1:-1].strip()
     return cleaned or None
 
 

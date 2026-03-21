@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Excluir Importação Manual{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Excluir importação manual</h1>
+        <p>Confirme a exclusão. As APRs criadas por esta importação manual serão removidas.</p>
+    </div>
+</section>
+
+<section class="card">
+    {% if form_errors %}
+    <div class="alert alert-error">
+        {% for error in form_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <p><strong>Importação:</strong> #{{ batch.id }}</p>
+    <p><strong>Arquivo:</strong> {{ batch.nome_arquivo }}</p>
+    <p><strong>Criadas:</strong> {{ batch.total_criadas }}</p>
+    <p><strong>Ignoradas:</strong> {{ batch.total_ignoradas }}</p>
+    <form method="post" action="/manual-aprs/import-batches/{{ batch.id }}/delete" class="form-grid">
+        <label class="full-width">Digite o ID da importação manual para confirmar
+            <input type="text" name="confirm_batch_id" placeholder="{{ batch.id }}" required>
+        </label>
+        <div class="actions full-width">
+            <button class="button danger-button" type="submit">Excluir importação</button>
+            <a class="button button-secondary" href="/manual-aprs">Cancelar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
